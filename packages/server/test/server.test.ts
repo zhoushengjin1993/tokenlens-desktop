@@ -59,5 +59,22 @@ describe('TokenLensServer realtime WebSocket', () => {
     ws.close();
     expect(gotInit).toBe(true);
     expect(receivedUpdates.length).toBeGreaterThanOrEqual(3);
+
+    const mcpRes = await fetch(`http://${host}:${port}/mcp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_turn_usage_summary', arguments: { limit: 5, includeCost: true } },
+      }),
+    });
+    expect(mcpRes.status).toBe(200);
+    const mcpJson = (await mcpRes.json()) as {
+      result: { structuredContent: { count: number; totalTokens: number } };
+    };
+    expect(mcpJson.result.structuredContent.count).toBeGreaterThan(0);
+    expect(mcpJson.result.structuredContent.totalTokens).toBeGreaterThan(0);
   });
 });

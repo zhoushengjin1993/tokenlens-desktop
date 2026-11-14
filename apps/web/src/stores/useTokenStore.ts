@@ -11,6 +11,7 @@ interface TokenStoreState {
   uiState: UiState;
   expandedTurnKey: string | null;
   showOnboarding: boolean;
+  showCost: boolean;
   wsConnected: boolean;
 
   setInit: (turns: UnifiedTurnUsage[], health: AdapterHealth[], activeClient: ClientType | null) => void;
@@ -18,6 +19,7 @@ interface TokenStoreState {
   setHealth: (health: AdapterHealth[]) => void;
   setSelectedClient: (client: ClientType) => void;
   toggleAutoSwitch: () => void;
+  toggleShowCost: () => void;
   setUiState: (state: UiState) => void;
   toggleUiState: () => void;
   setExpandedTurnKey: (key: string | null) => void;
@@ -37,6 +39,7 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
   uiState: 'drawer',
   expandedTurnKey: null,
   showOnboarding: false,
+  showCost: true,
   wsConnected: false,
 
   setInit: (turns, health, activeClient) =>
@@ -63,6 +66,7 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
   setHealth: (health) => set({ health }),
   setSelectedClient: (selectedClient) => set({ selectedClient }),
   toggleAutoSwitch: () => set((state) => ({ autoSwitch: !state.autoSwitch })),
+  toggleShowCost: () => set((state) => ({ showCost: !state.showCost })),
   setUiState: (uiState) => set({ uiState }),
   toggleUiState: () =>
     set((state) => ({ uiState: state.uiState === 'pill' ? 'drawer' : 'pill' })),
