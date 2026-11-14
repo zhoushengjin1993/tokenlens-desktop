@@ -1,11 +1,16 @@
 import { useEffect } from 'react';
 import type { AdapterHealth, ClientType, UnifiedTurnUsage } from '@tokenlens/core';
 import { useTokenStore } from '../stores/useTokenStore';
+import { isTauriEnv } from './useTauriBridge';
 
 type IncomingMessage =
   | { type: 'init'; turns: UnifiedTurnUsage[]; health: AdapterHealth[]; activeClient: ClientType | null }
   | { type: 'turn:update'; turn: UnifiedTurnUsage; activeClient: ClientType }
   | { type: 'health:update'; health: AdapterHealth[] };
+
+export function apiBaseUrl(): string {
+  return isTauriEnv() ? 'http://127.0.0.1:4789' : '';
+}
 
 export function useTokenStream(): void {
   const setInit = useTokenStore((s) => s.setInit);
@@ -32,8 +37,9 @@ export function useTokenStream(): void {
 
     const connect = () => {
       if (closed) return;
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const wsUrl = isTauriEnv()
+        ? 'ws://127.0.0.1:4789/ws'
+        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
       ws = new WebSocket(wsUrl);
 
       ws.onopen = () => setWsConnected(true);

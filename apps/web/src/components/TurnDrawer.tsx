@@ -5,6 +5,7 @@ import { useTokenStore, turnCompositeKey } from '../stores/useTokenStore';
 import { ALL_CLIENTS, CLIENT_LABELS, formatDuration, formatTokens } from '../utils/format';
 import { TurnDetail } from './TurnDetail';
 import { OnboardingCard } from './OnboardingCard';
+import { apiBaseUrl } from '../hooks/useTokenStream';
 
 export function TurnDrawer() {
   const turnsMap = useTokenStore((s) => s.turns);
@@ -39,7 +40,7 @@ export function TurnDrawer() {
 
   const handleRefreshHealth = async () => {
     try {
-      const res = await fetch('/api/health');
+      const res = await fetch(`${apiBaseUrl()}/api/health`);
       const data = (await res.json()) as { health: typeof health };
       setHealth(data.health);
     } catch {
@@ -49,7 +50,7 @@ export function TurnDrawer() {
 
   const handleStartSim = async () => {
     try {
-      await fetch('/api/sim/start', { method: 'POST' });
+      await fetch(`${apiBaseUrl()}/api/sim/start`, { method: 'POST' });
       setShowOnboarding(false);
     } catch {
       // Ignore network error
