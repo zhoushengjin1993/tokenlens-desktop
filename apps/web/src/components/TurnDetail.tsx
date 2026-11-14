@@ -57,9 +57,17 @@ export function TurnDetail({ turn }: TurnDetailProps) {
           </span>
           <span className="text-amber-300">{formatTokens(turn.reasoningTokens, isEstimated)}</span>
         </div>
-        <div className="flex justify-between bg-white/[0.03] rounded px-2 py-1">
-          <span className="text-sky-400">Output</span>
-          <span className="text-sky-300">{formatTokens(turn.outputTokens, isEstimated)}</span>
+        <div className="flex flex-col justify-center bg-white/[0.03] rounded px-2 py-1">
+          <div className="flex justify-between items-center">
+            <span className="text-sky-400">Output</span>
+            <span className="text-sky-300">{formatTokens(turn.outputTokens, isEstimated)}</span>
+          </div>
+          <div
+            className="text-[10px] text-zinc-400 truncate mt-0.5"
+            title={turn.model || '本地日志未记录模型'}
+          >
+            模型: {turn.model || '未记录'}
+          </div>
         </div>
       </div>
 
