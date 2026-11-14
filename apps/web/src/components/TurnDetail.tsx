@@ -36,38 +36,39 @@ export function TurnDetail({ turn }: TurnDetailProps) {
           </span>
         )}
         {isSpike && (
-          <span className="px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-400/30 text-orange-300 flex items-center gap-1">
+          <span
+            className="px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-400/30 text-orange-300 flex items-center gap-1"
+            title="单轮输入 ≥50k，建议精简上下文"
+          >
             <AlertTriangle className="w-3 h-3" /> Spike &gt;50k
           </span>
         )}
       </div>
 
+      {isSpike && (
+        <div className="rounded-lg bg-orange-500/10 border border-orange-400/25 px-2.5 py-1.5 text-[10px] text-orange-200/90 leading-relaxed">
+          ⚠ 单轮输入已超 50k，建议减少整文件读取、清理无关历史或新开会话以节省 Token。
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-1.5 font-mono text-[11px]">
-        <div className="flex justify-between bg-white/[0.03] rounded px-2 py-1">
+        <div className="flex items-center justify-between bg-white/[0.03] rounded px-2 py-1">
           <span className="text-zinc-400">Input</span>
           <span>{formatTokens(turn.inputTokens, isEstimated)}</span>
         </div>
-        <div className="flex justify-between bg-white/[0.03] rounded px-2 py-1">
+        <div className="flex items-center justify-between bg-white/[0.03] rounded px-2 py-1">
           <span className="text-emerald-400">Cached</span>
           <span className="text-emerald-300">{formatTokens(turn.cachedTokens, isEstimated)}</span>
         </div>
-        <div className="flex justify-between bg-white/[0.03] rounded px-2 py-1">
+        <div className="flex items-center justify-between bg-white/[0.03] rounded px-2 py-1">
           <span className="text-amber-400 flex items-center gap-1">
             <Cpu className="w-3 h-3" /> Reason
           </span>
           <span className="text-amber-300">{formatTokens(turn.reasoningTokens, isEstimated)}</span>
         </div>
-        <div className="flex flex-col justify-center bg-white/[0.03] rounded px-2 py-1">
-          <div className="flex justify-between items-center">
-            <span className="text-sky-400">Output</span>
-            <span className="text-sky-300">{formatTokens(turn.outputTokens, isEstimated)}</span>
-          </div>
-          <div
-            className="text-[10px] text-zinc-400 truncate mt-0.5"
-            title={turn.model || '本地日志未记录模型'}
-          >
-            模型: {turn.model || '未记录'}
-          </div>
+        <div className="flex items-center justify-between bg-white/[0.03] rounded px-2 py-1">
+          <span className="text-sky-400">Output</span>
+          <span className="text-sky-300">{formatTokens(turn.outputTokens, isEstimated)}</span>
         </div>
       </div>
 

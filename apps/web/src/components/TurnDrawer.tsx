@@ -474,6 +474,14 @@ export function TurnDrawer() {
                             <span className="font-mono text-[11px] font-semibold text-zinc-200">
                               T{turn.turnIndex}
                             </span>
+                            {turn.inputTokens >= 50_000 && (
+                              <span
+                                className="px-1 py-0.2 rounded bg-orange-500/15 border border-orange-400/30 text-[9px] font-mono text-orange-300 shrink-0"
+                                title="输入激增 >50k，建议优化上下文"
+                              >
+                                &gt;50k
+                              </span>
+                            )}
                             <span className="text-xs text-zinc-300 truncate">
                               {turn.promptSummary || '(无摘要)'}
                             </span>

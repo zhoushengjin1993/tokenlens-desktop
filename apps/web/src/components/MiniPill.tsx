@@ -27,7 +27,7 @@ export function MiniPill({ latestTurn, onExpand }: MiniPillProps) {
       exit={{ opacity: 0, scale: 0.96, y: -4 }}
       transition={{ duration: 0.18 }}
       className="glass-surface h-[36px] w-[260px] rounded-full px-3 flex items-center justify-between text-xs text-zinc-100 cursor-pointer hover:border-white/20 transition-colors"
-      title="展开详情 (Alt+T)"
+      title={isSpike ? '输入激增 >50k，点击展开 (Alt+T)' : '展开详情 (Alt+T)'}
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />
