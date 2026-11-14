@@ -37,11 +37,24 @@ fn is_backend_listening() -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
-fn find_server_cli() -> Option<PathBuf> {
-    let manifest_candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+fn resolve_server_command(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf)> {
+    let node_name = if cfg!(windows) { "node.exe" } else { "node" };
+
+    if let Ok(res_dir) = app.path().resource_dir() {
+        for sub in ["resources/server", "server"] {
+            let dir = res_dir.join(sub);
+            let bundled_node = dir.join(node_name);
+            let bundled_cli = dir.join("cli.cjs");
+            if bundled_node.exists() && bundled_cli.exists() {
+                return Some((bundled_node, bundled_cli));
+            }
+        }
+    }
+
+    let manifest_cli = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../../packages/server/dist/cli.js");
-    if manifest_candidate.exists() {
-        return Some(manifest_candidate);
+    if manifest_cli.exists() {
+        return Some((PathBuf::from("node"), manifest_cli));
     }
 
     if let Ok(exe) = std::env::current_exe() {
@@ -50,11 +63,7 @@ fn find_server_cli() -> Option<PathBuf> {
             if let Some(d) = dir {
                 let candidate = d.join("packages/server/dist/cli.js");
                 if candidate.exists() {
-                    return Some(candidate);
-                }
-                let bundled = d.join("server/cli.js");
-                if bundled.exists() {
-                    return Some(bundled);
+                    return Some((PathBuf::from("node"), candidate));
                 }
                 dir = d.parent();
             }
@@ -64,13 +73,13 @@ fn find_server_cli() -> Option<PathBuf> {
     None
 }
 
-fn ensure_backend_running() -> Option<Child> {
+fn ensure_backend_running(app: &tauri::AppHandle) -> Option<Child> {
     if is_backend_listening() {
         return None;
     }
 
-    let cli_path = find_server_cli()?;
-    let mut cmd = Command::new("node");
+    let (node_bin, cli_path) = resolve_server_command(app)?;
+    let mut cmd = Command::new(&node_bin);
     cmd.arg(&cli_path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
@@ -162,7 +171,7 @@ pub fn run() {
         )
         .setup(|app| {
             // Auto-start local @tokenlens/server if port 4789 is not already listening
-            if let Some(child) = ensure_backend_running() {
+            if let Some(child) = ensure_backend_running(app.handle()) {
                 if let Ok(mut guard) = app.state::<BackendProcess>().0.lock() {
                     *guard = Some(child);
                 }

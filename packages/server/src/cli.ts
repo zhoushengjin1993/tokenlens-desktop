@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createAllAdapters } from '@tokenlens/adapters';
 import { createSimOverrides, TokenLensServer } from './server.js';
 import { startStdioMcpServer } from './mcp-server.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, '../../..');
+const currentDir =
+  typeof __dirname !== 'undefined' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(currentDir, '../../..');
 
 async function exists(target: string): Promise<boolean> {
   try {
@@ -39,8 +41,11 @@ async function main() {
     return;
   }
 
+  const inRepo = await exists(path.join(repoRoot, 'packages', 'server'));
   const fixturesDir = path.join(repoRoot, 'test', 'fixtures');
-  const replayTempDir = path.join(repoRoot, '.tmp-replay');
+  const replayTempDir = inRepo
+    ? path.join(repoRoot, '.tmp-replay')
+    : path.join(os.tmpdir(), 'tokenlens-replay');
   const webDistDir = path.join(repoRoot, 'apps', 'web', 'dist');
   const staticDir = (await exists(webDistDir)) ? webDistDir : undefined;
 
