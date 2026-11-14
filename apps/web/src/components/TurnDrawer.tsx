@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   Activity,
   AlertTriangle,
   Archive,
+  Check,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
@@ -11,8 +13,10 @@ import {
   Lock,
   LockOpen,
   MessageSquare,
+  Pencil,
   SlidersHorizontal,
   Stethoscope,
+  X,
 } from 'lucide-react';
 import { calculateTurnCost } from '@tokenlens/core/pricing';
 import type { UnifiedTurnUsage } from '@tokenlens/core';
@@ -143,6 +147,8 @@ function formatShortTime(ts: number): string {
 export function TurnDrawer() {
   const turnsMap = useTokenStore((s) => s.turns);
   const health = useTokenStore((s) => s.health);
+  const enabledClients = useTokenStore((s) => s.enabledClients);
+  const projectNameOverrides = useTokenStore((s) => s.projectNameOverrides);
   const selectedClient = useTokenStore((s) => s.selectedClient);
   const viewMode = useTokenStore((s) => s.viewMode);
   const timeRange = useTokenStore((s) => s.timeRange);
@@ -157,6 +163,8 @@ export function TurnDrawer() {
   const showSettings = useTokenStore((s) => s.showSettings);
   const wsConnected = useTokenStore((s) => s.wsConnected);
 
+  const toggleClientEnabled = useTokenStore((s) => s.toggleClientEnabled);
+  const setProjectNameOverride = useTokenStore((s) => s.setProjectNameOverride);
   const setSelectedClient = useTokenStore((s) => s.setSelectedClient);
   const setViewMode = useTokenStore((s) => s.setViewMode);
   const setTimeRange = useTokenStore((s) => s.setTimeRange);
@@ -172,6 +180,12 @@ export function TurnDrawer() {
   const setShowOnboarding = useTokenStore((s) => s.setShowOnboarding);
   const setShowSettings = useTokenStore((s) => s.setShowSettings);
   const setHealth = useTokenStore((s) => s.setHealth);
+
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState('');
+
+  const getProjectName = (projectId: string, fallback: string) =>
+    projectNameOverrides[projectId] || fallback;
 
   const thresholdLabel = `${Math.round(spikeThreshold / 1000)}k`;
   const todayStart = new Date();
@@ -214,7 +228,7 @@ export function TurnDrawer() {
   const summaryTitle = currentSession
     ? '当前会话总计'
     : currentProject
-      ? `${currentProject.projectName} · 项目总计`
+      ? `${getProjectName(currentProject.projectId, currentProject.projectName)} · 项目总计`
       : viewMode === 'archived'
         ? `${CLIENT_LABELS[selectedClient]} · 已归档总计`
         : `${CLIENT_LABELS[selectedClient]} · 活跃总计`;
@@ -329,9 +343,17 @@ export function TurnDrawer() {
         </div>
       </div>
 
-      {/* Client Tabs (2x3 Grid - zero horizontal scrollbar) */}
-      <div className="px-3 py-2 grid grid-cols-3 gap-1 border-b border-white/10">
-        {ALL_CLIENTS.map((client) => {
+      {/* Client Tabs */}
+      <div
+        className={`px-3 py-2 grid gap-1 border-b border-white/10 ${
+          enabledClients.length === 1
+            ? 'grid-cols-1'
+            : enabledClients.length === 2
+              ? 'grid-cols-2'
+              : 'grid-cols-3'
+        }`}
+      >
+        {ALL_CLIENTS.filter((c) => enabledClients.includes(c)).map((client) => {
           const active = selectedClient === client;
           const count = Object.values(turnsMap).filter((t) => t.client === client).length;
           return (
@@ -459,7 +481,7 @@ export function TurnDrawer() {
                       currentSession ? 'hover:text-zinc-200' : 'text-zinc-100 font-medium'
                     }`}
                   >
-                    {currentProject.projectName}
+                    {getProjectName(currentProject.projectId, currentProject.projectName)}
                   </button>
                 </>
               )}
@@ -503,6 +525,45 @@ export function TurnDrawer() {
                     >
                       {val / 1000}k
                     </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
+              <div>
+                <div className="text-xs font-semibold text-zinc-100">工具栏显示列表</div>
+                <div className="text-[11px] text-zinc-400 mt-0.5">
+                  勾选需要在顶部标签栏中显示的工具（至少保留一项）
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {ALL_CLIENTS.map((client) => {
+                  const checked = enabledClients.includes(client);
+                  const isLast = checked && enabledClients.length <= 1;
+                  return (
+                    <label
+                      key={client}
+                      title={
+                        isLast
+                          ? '至少保留一个工具'
+                          : `${checked ? '隐藏' : '显示'} ${CLIENT_LABELS[client]}`
+                      }
+                      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
+                        checked
+                          ? 'bg-emerald-500/12 border-emerald-400/35 text-zinc-100'
+                          : 'bg-white/[0.02] border-white/10 text-zinc-400 hover:text-zinc-200'
+                      } ${isLast ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={isLast}
+                        onChange={() => toggleClientEnabled(client)}
+                        className="accent-emerald-400 rounded cursor-pointer"
+                      />
+                      <span className="truncate">{CLIENT_LABELS[client]}</span>
+                    </label>
                   );
                 })}
               </div>
@@ -650,7 +711,7 @@ export function TurnDrawer() {
                         <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300 truncate max-w-[140px]">
-                              {sess.projectName}
+                              {getProjectName(sess.projectId, sess.projectName)}
                             </span>
                             <span>{sess.turns.length} 轮</span>
                             <span>缓存 {hitRate}%</span>
@@ -731,20 +792,90 @@ export function TurnDrawer() {
                   const est = proj.sessions.some((s) =>
                     s.turns.some((t) => t.usageAccuracy === 'estimated'),
                   );
+                  const displayName = getProjectName(proj.projectId, proj.projectName);
+                  const isEditing = editingProjectId === proj.projectId;
+                  const commitRename = () => {
+                    setProjectNameOverride(proj.projectId, editingProjectName);
+                    setEditingProjectId(null);
+                  };
                   return (
-                    <button
+                    <div
                       key={proj.projectId}
-                      type="button"
-                      onClick={() => selectProject(proj.projectId)}
-                      title="查看项目会话"
-                      className="w-full text-left rounded-xl bg-white/[0.03] border border-white/10 p-2.5 hover:border-white/20 transition-colors cursor-pointer space-y-1.5"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        if (!isEditing) selectProject(proj.projectId);
+                      }}
+                      onKeyDown={(e) => {
+                        if (!isEditing && (e.key === 'Enter' || e.key === ' ')) {
+                          e.preventDefault();
+                          selectProject(proj.projectId);
+                        }
+                      }}
+                      title={isEditing ? undefined : '查看项目会话'}
+                      className="group w-full text-left rounded-xl bg-white/[0.03] border border-white/10 p-2.5 hover:border-white/20 transition-colors cursor-pointer space-y-1.5"
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
                           <Folder className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                          <span className="text-xs font-medium text-zinc-100 truncate">
-                            {proj.projectName}
-                          </span>
+                          {isEditing ? (
+                            <div
+                              className="flex items-center gap-1 flex-1 min-w-0"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <input
+                                type="text"
+                                value={editingProjectName}
+                                onChange={(e) => setEditingProjectName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    commitRename();
+                                  } else if (e.key === 'Escape') {
+                                    e.preventDefault();
+                                    setEditingProjectId(null);
+                                  }
+                                }}
+                                autoFocus
+                                placeholder={proj.projectName}
+                                className="flex-1 min-w-0 px-1.5 py-0.5 rounded bg-black/40 border border-white/20 text-xs text-zinc-100 outline-none focus:border-emerald-400/60"
+                              />
+                              <button
+                                type="button"
+                                onClick={commitRename}
+                                title="保存名称"
+                                className="p-0.5 rounded hover:bg-emerald-500/20 text-emerald-400 cursor-pointer shrink-0"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingProjectId(null)}
+                                title="取消"
+                                className="p-0.5 rounded hover:bg-white/10 text-zinc-400 cursor-pointer shrink-0"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <span className="text-xs font-medium text-zinc-100 truncate">
+                                {displayName}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingProjectId(proj.projectId);
+                                  setEditingProjectName(displayName);
+                                }}
+                                title="重命名项目"
+                                className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-opacity cursor-pointer shrink-0"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                            </>
+                          )}
                         </div>
                         <span className="font-mono text-xs font-semibold text-zinc-100 shrink-0">
                           {formatTokens(proj.totalTokens, est)}
@@ -760,7 +891,7 @@ export function TurnDrawer() {
                           {proj.projectPath || '全局/未绑定'}
                         </span>
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>

@@ -63,9 +63,15 @@ export function normalizeProject(projectPath?: string, explicitName?: string): {
 } {
   const cleaned = projectPath?.trim().replace(/[\\/]+$/, '');
   if (!cleaned) {
+    if (explicitName) {
+      return {
+        projectId: `project:${explicitName}`,
+        projectName: explicitName,
+      };
+    }
     return {
       projectId: '__global__',
-      projectName: explicitName || '未绑定项目',
+      projectName: '未绑定项目',
     };
   }
   const normalizedId = cleaned.replace(/\\/g, '/').toLowerCase();

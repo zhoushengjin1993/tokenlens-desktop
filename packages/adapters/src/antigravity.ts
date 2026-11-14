@@ -57,6 +57,7 @@ interface SummaryRow {
   conversation_id: string;
   title: string;
   workspace_uris: string;
+  project_id?: string;
 }
 
 function estimateTokens(charCount: number): number {
@@ -78,7 +79,10 @@ export class AntigravityAdapter extends BaseLogAdapter {
   readonly client: ClientType = 'antigravity';
   private readonly tailer = new ByteOffsetTailer();
   private readonly contexts = new Map<string, AntigravitySessionCtx>();
-  private readonly sessionMeta = new Map<string, { title?: string; projectPath?: string }>();
+  private readonly sessionMeta = new Map<
+    string,
+    { title?: string; projectPath?: string; projectName?: string }
+  >();
   private watcher: FSWatcher | null = null;
 
   getDefaultPaths(): string[] {
@@ -173,12 +177,20 @@ export class AntigravityAdapter extends BaseLogAdapter {
     try {
       db = openReadOnlySqlite(dbPath, 3000);
       const rows = db
-        .prepare('SELECT conversation_id, title, workspace_uris FROM conversation_summaries')
+        .prepare(
+          'SELECT conversation_id, title, workspace_uris, project_id FROM conversation_summaries',
+        )
         .all() as unknown as SummaryRow[];
       for (const r of rows) {
+        const projectPath = parseWorkspaceUri(r.workspace_uris);
+        const projectName =
+          !projectPath && r.project_id && r.project_id !== 'outside-of-project'
+            ? `ag-${r.project_id.slice(0, 8)}`
+            : undefined;
         this.sessionMeta.set(r.conversation_id, {
           title: r.title || undefined,
-          projectPath: parseWorkspaceUri(r.workspace_uris),
+          projectPath,
+          projectName,
         });
       }
     } catch (err) {
@@ -267,6 +279,7 @@ export class AntigravityAdapter extends BaseLogAdapter {
           sessionId: ctx.sessionId,
           sessionTitle: meta?.title,
           projectPath: meta?.projectPath,
+          projectName: meta?.projectName,
           archived: false,
           sourceMode: 'desktop',
           turnId: ctx.currentTurnId,
@@ -311,6 +324,7 @@ export class AntigravityAdapter extends BaseLogAdapter {
           sessionId: ctx.sessionId,
           sessionTitle: meta?.title,
           projectPath: meta?.projectPath,
+          projectName: meta?.projectName,
           archived: false,
           sourceMode: 'desktop',
           turnId: ctx.currentTurnId,

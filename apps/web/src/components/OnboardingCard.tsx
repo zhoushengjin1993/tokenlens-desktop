@@ -1,5 +1,6 @@
 import { CheckCircle2, CircleDashed, RefreshCw } from 'lucide-react';
 import type { AdapterHealth } from '@tokenlens/core';
+import { useTokenStore } from '../stores/useTokenStore';
 import { CLIENT_LABELS } from '../utils/format';
 
 interface OnboardingCardProps {
@@ -9,12 +10,15 @@ interface OnboardingCardProps {
 }
 
 export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCardProps) {
+  const enabledClients = useTokenStore((s) => s.enabledClients);
+  const toggleClientEnabled = useTokenStore((s) => s.toggleClientEnabled);
+
   return (
     <div className="p-3 space-y-2.5">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs font-semibold text-zinc-100">零配置客户端探测</div>
-          <div className="text-[11px] text-zinc-400">自动扫描本机 Desktop & CLI 日志路径</div>
+          <div className="text-[11px] text-zinc-400">可勾选要在顶部工具栏显示的工具</div>
         </div>
         <button
           type="button"
@@ -27,34 +31,50 @@ export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCard
       </div>
 
       <div className="space-y-1.5">
-        {health.map((item) => (
-          <div
-            key={item.client}
-            className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2 flex items-start gap-2"
-          >
-            {item.available ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-            ) : (
-              <CircleDashed className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
-            )}
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-medium text-zinc-200">{CLIENT_LABELS[item.client]}</span>
-                <span className={item.available ? 'text-emerald-400 text-[10px]' : 'text-zinc-500 text-[10px]'}>
-                  {item.available ? '已连接' : '未检测到'}
-                </span>
-              </div>
-              {item.detectedPaths.length > 0 && (
-                <div className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
-                  {item.detectedPaths[0]}
+        {health.map((item) => {
+          const checked = enabledClients.includes(item.client);
+          return (
+            <div
+              key={item.client}
+              className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2 flex items-start gap-2"
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleClientEnabled(item.client)}
+                title={checked ? '取消勾选则隐藏该工具Tab' : '勾选后在工具栏显示'}
+                className="mt-0.5 accent-emerald-500 cursor-pointer shrink-0"
+              />
+              {item.available ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+              ) : (
+                <CircleDashed className="w-4 h-4 text-zinc-500 shrink-0 mt-0.5" />
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-medium text-zinc-200">{CLIENT_LABELS[item.client]}</span>
+                  <span
+                    className={
+                      item.available
+                        ? 'text-emerald-400 text-[10px]'
+                        : 'text-zinc-500 text-[10px]'
+                    }
+                  >
+                    {item.available ? '已连接' : '未检测到'}
+                  </span>
                 </div>
-              )}
-              {item.errors.length > 0 && (
-                <div className="text-[10px] text-orange-400 mt-0.5">{item.errors[0]}</div>
-              )}
+                {item.detectedPaths.length > 0 && (
+                  <div className="text-[10px] text-zinc-400 font-mono truncate mt-0.5">
+                    {item.detectedPaths[0]}
+                  </div>
+                )}
+                {item.errors.length > 0 && (
+                  <div className="text-[10px] text-orange-400 mt-0.5">{item.errors[0]}</div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <button

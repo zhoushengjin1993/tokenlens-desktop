@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import type { AdapterHealth, ClientType, UnifiedTurnUsage } from '@tokenlens/core';
+import { ALL_CLIENTS } from '../utils/format';
 
 export type UiState = 'pill' | 'drawer';
 export type ViewMode = 'active' | 'archived';
 export type TimeRange = 'all' | 'today';
 
 const SPIKE_STORAGE_KEY = 'tokenlens_spike_threshold';
+const ENABLED_CLIENTS_KEY = 'tokenlens_enabled_clients';
+const PROJECT_NAMES_KEY = 'tokenlens_project_names';
 
 function loadInitialSpikeThreshold(): number {
   try {
@@ -18,9 +21,44 @@ function loadInitialSpikeThreshold(): number {
   return 50_000;
 }
 
+function loadInitialEnabledClients(): ClientType[] {
+  try {
+    const raw = window.localStorage.getItem(ENABLED_CLIENTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (Array.isArray(parsed)) {
+        const valid = parsed.filter((c): c is ClientType =>
+          ALL_CLIENTS.includes(c as ClientType),
+        );
+        if (valid.length > 0) return valid;
+      }
+    }
+  } catch {
+    // Ignore storage error
+  }
+  return [...ALL_CLIENTS];
+}
+
+function loadInitialProjectNames(): Record<string, string> {
+  try {
+    const raw = window.localStorage.getItem(PROJECT_NAMES_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, string>;
+      }
+    }
+  } catch {
+    // Ignore storage error
+  }
+  return {};
+}
+
 interface TokenStoreState {
   turns: Record<string, UnifiedTurnUsage>;
   health: AdapterHealth[];
+  enabledClients: ClientType[];
+  projectNameOverrides: Record<string, string>;
   selectedClient: ClientType;
   viewMode: ViewMode;
   timeRange: TimeRange;
@@ -39,6 +77,8 @@ interface TokenStoreState {
   setInit: (turns: UnifiedTurnUsage[], health: AdapterHealth[], activeClient: ClientType | null) => void;
   upsertTurn: (turn: UnifiedTurnUsage, activeClient: ClientType) => void;
   setHealth: (health: AdapterHealth[]) => void;
+  toggleClientEnabled: (client: ClientType) => void;
+  setProjectNameOverride: (projectId: string, name: string) => void;
   setSelectedClient: (client: ClientType) => void;
   setViewMode: (mode: ViewMode) => void;
   setTimeRange: (range: TimeRange) => void;
@@ -61,10 +101,14 @@ export function turnCompositeKey(t: UnifiedTurnUsage): string {
   return `${t.client}::${t.sessionId}::${t.turnId}`;
 }
 
+const initialEnabledClients = loadInitialEnabledClients();
+
 export const useTokenStore = create<TokenStoreState>((set) => ({
   turns: {},
   health: [],
-  selectedClient: 'codex',
+  enabledClients: initialEnabledClients,
+  projectNameOverrides: loadInitialProjectNames(),
+  selectedClient: initialEnabledClients[0] ?? 'codex',
   viewMode: 'active',
   timeRange: 'all',
   onlySpikes: false,
@@ -83,31 +127,74 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
     set((state) => {
       const map: Record<string, UnifiedTurnUsage> = {};
       for (const t of turns) map[turnCompositeKey(t)] = t;
+      const canAuto =
+        state.autoSwitch && activeClient && state.enabledClients.includes(activeClient);
       return {
         turns: map,
         health,
-        selectedClient:
-          state.autoSwitch && activeClient ? activeClient : state.selectedClient,
+        selectedClient: canAuto ? activeClient : state.selectedClient,
       };
     }),
 
   upsertTurn: (turn, activeClient) =>
-    set((state) => ({
-      turns: {
-        ...state.turns,
-        [turnCompositeKey(turn)]: turn,
-      },
-      ...(state.autoSwitch
-        ? {
-            selectedClient: activeClient,
-            viewMode: turn.archived ? 'archived' : 'active',
-            selectedProjectId: turn.archived ? null : turn.projectId,
-            selectedSessionId: turn.sessionId,
-          }
-        : {}),
-    })),
+    set((state) => {
+      const canAuto = state.autoSwitch && state.enabledClients.includes(activeClient);
+      return {
+        turns: {
+          ...state.turns,
+          [turnCompositeKey(turn)]: turn,
+        },
+        ...(canAuto
+          ? {
+              selectedClient: activeClient,
+              viewMode: turn.archived ? 'archived' : 'active',
+              selectedProjectId: turn.archived ? null : turn.projectId,
+              selectedSessionId: turn.sessionId,
+            }
+          : {}),
+      };
+    }),
 
   setHealth: (health) => set({ health }),
+  toggleClientEnabled: (client) =>
+    set((state) => {
+      const exists = state.enabledClients.includes(client);
+      if (exists && state.enabledClients.length <= 1) {
+        return state; // Keep at least 1 tool visible
+      }
+      const next = exists
+        ? state.enabledClients.filter((c) => c !== client)
+        : ALL_CLIENTS.filter((c) => c === client || state.enabledClients.includes(c));
+      try {
+        window.localStorage.setItem(ENABLED_CLIENTS_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage error
+      }
+      const nextSelected = next.includes(state.selectedClient) ? state.selectedClient : next[0];
+      return {
+        enabledClients: next,
+        selectedClient: nextSelected,
+        ...(nextSelected !== state.selectedClient
+          ? { selectedProjectId: null, selectedSessionId: null, expandedTurnKey: null }
+          : {}),
+      };
+    }),
+  setProjectNameOverride: (projectId, name) =>
+    set((state) => {
+      const trimmed = name.trim();
+      const next = { ...state.projectNameOverrides };
+      if (trimmed) {
+        next[projectId] = trimmed;
+      } else {
+        delete next[projectId];
+      }
+      try {
+        window.localStorage.setItem(PROJECT_NAMES_KEY, JSON.stringify(next));
+      } catch {
+        // Ignore storage error
+      }
+      return { projectNameOverrides: next };
+    }),
   setSelectedClient: (selectedClient) =>
     set({
       selectedClient,
