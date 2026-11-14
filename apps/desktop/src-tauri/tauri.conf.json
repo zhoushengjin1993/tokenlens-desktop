@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "TokenLens Desktop",
+  "version": "0.1.0",
+  "identifier": "io.github.zhoushengjin1993.tokenlens",
+  "build": {
+    "beforeDevCommand": "pnpm --filter @tokenlens/web dev -- --host 127.0.0.1",
+    "devUrl": "http://127.0.0.1:4790",
+    "beforeBuildCommand": "pnpm --filter @tokenlens/web build",
+    "frontendDist": "../../web/dist"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "TokenLens",
+        "width": 360,
+        "height": 580,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "resizable": false,
+        "skipTaskbar": true,
+        "shadow": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all"
+  }
+}

@@ -65,7 +65,10 @@ export function TurnDrawer() {
       className="glass-surface w-[360px] h-[580px] rounded-2xl flex flex-col overflow-hidden text-zinc-100"
     >
       {/* Top Bar */}
-      <div className="px-3.5 py-2.5 border-b border-white/10 flex items-center justify-between">
+      <div
+        data-tauri-drag-region
+        className="px-3.5 py-2.5 border-b border-white/10 flex items-center justify-between cursor-grab active:cursor-grabbing"
+      >
         <div className="flex items-center gap-2">
           <Activity className={`w-4 h-4 ${wsConnected ? 'text-emerald-400' : 'text-zinc-500'}`} />
           <span className="text-xs font-semibold tracking-wide">TokenLens</span>

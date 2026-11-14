@@ -9,6 +9,12 @@
     background: radial-gradient(circle at top right, rgba(24, 24, 27, 0.95), #09090b);
     font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   }
+
+  html.tauri-transparent,
+  html.tauri-transparent body,
+  html.tauri-transparent #root {
+    background: transparent !important;
+  }
 }
 
 .glass-surface {
