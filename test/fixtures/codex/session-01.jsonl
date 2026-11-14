@@ -1,0 +1,7 @@
+{"timestamp":"2026-11-14T01:00:00.000Z","ordinal":1,"type":"session_meta","payload":{"id":"codex-sess-01","originator":"codex_cli_rs","cli_version":"0.22.0","model_provider":"openai"}}
+{"timestamp":"2026-11-14T01:00:01.000Z","ordinal":2,"type":"turn_context","payload":{"turn_id":"turn_codex_1","model":"gpt-5-codex","effort":"medium"}}
+{"timestamp":"2026-11-14T01:00:01.100Z","ordinal":3,"type":"event_msg","payload":{"type":"task_started","turn_id":"turn_codex_1","started_at":1794618001100}}
+{"timestamp":"2026-11-14T01:00:01.200Z","ordinal":4,"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"Refactor TurnAggregator to deduplicate message snapshots"}]}}
+{"timestamp":"2026-11-14T01:00:03.000Z","ordinal":5,"type":"response_item","payload":{"type":"custom_tool_call","call_id":"call_01","name":"read_file","status":"completed"}}
+{"timestamp":"2026-11-14T01:00:04.500Z","ordinal":6,"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":12400,"cached_input_tokens":9600,"cache_write_input_tokens":0,"output_tokens":380,"reasoning_output_tokens":120,"total_tokens":12780},"total_token_usage":{"input_tokens":12400,"cached_input_tokens":9600,"cache_write_input_tokens":0,"output_tokens":380,"reasoning_output_tokens":120,"total_tokens":12780}}}}
+{"timestamp":"2026-11-14T01:00:05.000Z","ordinal":7,"type":"event_msg","payload":{"type":"task_complete","turn_id":"turn_codex_1"}}
