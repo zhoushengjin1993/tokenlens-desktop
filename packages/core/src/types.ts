@@ -1,4 +1,4 @@
-export type ClientType = 'codex' | 'zcode' | 'claude' | 'dsh' | 'antigravity';
+export type ClientType = 'codex' | 'zcode' | 'claude' | 'dsh' | 'antigravity' | 'cursor';
 
 export type TurnStatus = 'running' | 'completed' | 'incomplete';
 

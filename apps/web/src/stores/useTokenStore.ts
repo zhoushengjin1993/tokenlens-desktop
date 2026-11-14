@@ -3,18 +3,36 @@ import type { AdapterHealth, ClientType, UnifiedTurnUsage } from '@tokenlens/cor
 
 export type UiState = 'pill' | 'drawer';
 export type ViewMode = 'active' | 'archived';
+export type TimeRange = 'all' | 'today';
+
+const SPIKE_STORAGE_KEY = 'tokenlens_spike_threshold';
+
+function loadInitialSpikeThreshold(): number {
+  try {
+    const raw = window.localStorage.getItem(SPIKE_STORAGE_KEY);
+    const num = raw ? Number(raw) : NaN;
+    if (Number.isFinite(num) && num >= 10_000) return num;
+  } catch {
+    // Ignore storage error
+  }
+  return 50_000;
+}
 
 interface TokenStoreState {
   turns: Record<string, UnifiedTurnUsage>;
   health: AdapterHealth[];
   selectedClient: ClientType;
   viewMode: ViewMode;
+  timeRange: TimeRange;
+  onlySpikes: boolean;
+  spikeThreshold: number;
   selectedProjectId: string | null;
   selectedSessionId: string | null;
   autoSwitch: boolean;
   uiState: UiState;
   expandedTurnKey: string | null;
   showOnboarding: boolean;
+  showSettings: boolean;
   showCost: boolean;
   wsConnected: boolean;
 
@@ -23,6 +41,9 @@ interface TokenStoreState {
   setHealth: (health: AdapterHealth[]) => void;
   setSelectedClient: (client: ClientType) => void;
   setViewMode: (mode: ViewMode) => void;
+  setTimeRange: (range: TimeRange) => void;
+  toggleOnlySpikes: () => void;
+  setSpikeThreshold: (threshold: number) => void;
   selectProject: (projectId: string | null) => void;
   selectSession: (sessionId: string | null) => void;
   goRoot: () => void;
@@ -32,6 +53,7 @@ interface TokenStoreState {
   toggleUiState: () => void;
   setExpandedTurnKey: (key: string | null) => void;
   setShowOnboarding: (show: boolean) => void;
+  setShowSettings: (show: boolean) => void;
   setWsConnected: (connected: boolean) => void;
 }
 
@@ -44,12 +66,16 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
   health: [],
   selectedClient: 'codex',
   viewMode: 'active',
+  timeRange: 'all',
+  onlySpikes: false,
+  spikeThreshold: loadInitialSpikeThreshold(),
   selectedProjectId: null,
   selectedSessionId: null,
   autoSwitch: true,
   uiState: 'drawer',
   expandedTurnKey: null,
   showOnboarding: false,
+  showSettings: false,
   showCost: true,
   wsConnected: false,
 
@@ -96,6 +122,26 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
       selectedSessionId: null,
       expandedTurnKey: null,
     }),
+  setTimeRange: (timeRange) =>
+    set({
+      timeRange,
+      selectedProjectId: null,
+      selectedSessionId: null,
+      expandedTurnKey: null,
+    }),
+  toggleOnlySpikes: () =>
+    set((state) => ({
+      onlySpikes: !state.onlySpikes,
+      expandedTurnKey: null,
+    })),
+  setSpikeThreshold: (spikeThreshold) => {
+    try {
+      window.localStorage.setItem(SPIKE_STORAGE_KEY, String(spikeThreshold));
+    } catch {
+      // Ignore storage error
+    }
+    set({ spikeThreshold });
+  },
   selectProject: (selectedProjectId) =>
     set({
       selectedProjectId,
@@ -122,6 +168,9 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
     set((state) => ({
       expandedTurnKey: state.expandedTurnKey === expandedTurnKey ? null : expandedTurnKey,
     })),
-  setShowOnboarding: (showOnboarding) => set({ showOnboarding }),
+  setShowOnboarding: (showOnboarding) =>
+    set({ showOnboarding, ...(showOnboarding ? { showSettings: false } : {}) }),
+  setShowSettings: (showSettings) =>
+    set({ showSettings, ...(showSettings ? { showOnboarding: false } : {}) }),
   setWsConnected: (wsConnected) => set({ wsConnected }),
 }));

@@ -43,7 +43,7 @@ describe('TokenLensServer realtime WebSocket', () => {
         const msg = JSON.parse(raw.toString()) as WsMessage;
         if (msg.type === 'init') {
           gotInit = true;
-          expect(msg.health).toHaveLength(5);
+          expect(msg.health).toHaveLength(6);
           await fetch(`http://${host}:${port}/api/sim/start`, { method: 'POST' });
         } else if (msg.type === 'turn:update') {
           receivedUpdates.push(msg);

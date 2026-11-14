@@ -255,5 +255,6 @@ export function createSimOverrides(replayTempDir: string): Partial<Record<Client
     claude: { watchPaths: [path.join(replayTempDir, 'claude')] },
     dsh: { watchPaths: [path.join(replayTempDir, 'dsh')] },
     antigravity: { watchPaths: [path.join(replayTempDir, 'antigravity')] },
+    cursor: { watchPaths: [path.join(replayTempDir, 'cursor')] },
   };
 }

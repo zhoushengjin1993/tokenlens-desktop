@@ -48,6 +48,9 @@ fn resolve_server_command(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf)> 
             if bundled_node.exists() && bundled_cli.exists() {
                 return Some((bundled_node, bundled_cli));
             }
+            if bundled_cli.exists() {
+                return Some((PathBuf::from("node"), bundled_cli));
+            }
         }
     }
 

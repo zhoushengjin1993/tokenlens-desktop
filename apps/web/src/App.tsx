@@ -20,7 +20,7 @@ export function App() {
     clientTurns[clientTurns.length - 1] ?? allTurns[allTurns.length - 1] ?? null;
 
   return (
-    <div className="min-h-screen w-full p-4 flex justify-end items-start">
+    <div className="h-screen w-full p-2 flex justify-end items-start overflow-hidden">
       <AnimatePresence mode="wait">
         {uiState === 'pill' ? (
           <MiniPill

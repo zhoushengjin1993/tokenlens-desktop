@@ -4,12 +4,14 @@ import { ZcodeAdapter } from './zcode.js';
 import { ClaudeAdapter } from './claude.js';
 import { DshAdapter } from './dsh.js';
 import { AntigravityAdapter } from './antigravity.js';
+import { CursorAdapter } from './cursor.js';
 
 export { CodexAdapter } from './codex.js';
 export { ZcodeAdapter } from './zcode.js';
 export { ClaudeAdapter } from './claude.js';
 export { DshAdapter } from './dsh.js';
 export { AntigravityAdapter } from './antigravity.js';
+export { CursorAdapter } from './cursor.js';
 export { ByteOffsetTailer } from './utils/jsonl-tail.js';
 
 export function createAdapter(client: ClientType, options?: AdapterOptions): BaseLogAdapter {
@@ -24,12 +26,14 @@ export function createAdapter(client: ClientType, options?: AdapterOptions): Bas
       return new DshAdapter(options);
     case 'antigravity':
       return new AntigravityAdapter(options);
+    case 'cursor':
+      return new CursorAdapter(options);
   }
 }
 
 export function createAllAdapters(
   overrides: Partial<Record<ClientType, AdapterOptions>> = {},
 ): BaseLogAdapter[] {
-  const clients: ClientType[] = ['codex', 'zcode', 'claude', 'dsh', 'antigravity'];
+  const clients: ClientType[] = ['codex', 'zcode', 'claude', 'dsh', 'antigravity', 'cursor'];
   return clients.map((c) => createAdapter(c, overrides[c]));
 }

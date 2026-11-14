@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import type { UnifiedTurnUsage } from '@tokenlens/core';
+import { useTokenStore } from '../stores/useTokenStore';
 import { CLIENT_LABELS, formatDuration, formatTokens } from '../utils/format';
 
 interface MiniPillProps {
@@ -9,8 +10,10 @@ interface MiniPillProps {
 }
 
 export function MiniPill({ latestTurn, onExpand }: MiniPillProps) {
+  const spikeThreshold = useTokenStore((s) => s.spikeThreshold);
+  const thresholdLabel = `${Math.round(spikeThreshold / 1000)}k`;
   const isRunning = latestTurn?.status === 'running';
-  const isSpike = (latestTurn?.inputTokens ?? 0) >= 50_000;
+  const isSpike = (latestTurn?.inputTokens ?? 0) >= spikeThreshold;
 
   const dotClass = isSpike
     ? 'bg-orange-400 shadow-[0_0_8px_rgba(251,146,60,0.8)]'
@@ -27,7 +30,7 @@ export function MiniPill({ latestTurn, onExpand }: MiniPillProps) {
       exit={{ opacity: 0, scale: 0.96, y: -4 }}
       transition={{ duration: 0.18 }}
       className="glass-surface h-[36px] w-[260px] rounded-full px-3 flex items-center justify-between text-xs text-zinc-100 cursor-pointer hover:border-white/20 transition-colors"
-      title={isSpike ? '输入激增 >50k，点击展开 (Alt+T)' : '展开详情 (Alt+T)'}
+      title={isSpike ? `输入激增 >${thresholdLabel}，点击展开 (Alt+T)` : '展开详情 (Alt+T)'}
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={`h-2 w-2 rounded-full shrink-0 ${dotClass}`} />

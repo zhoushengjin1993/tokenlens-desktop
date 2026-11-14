@@ -34,7 +34,7 @@ export const MCP_TOOLS = [
       properties: {
         client: {
           type: 'string',
-          enum: ['codex', 'zcode', 'claude', 'dsh', 'antigravity'],
+          enum: ['codex', 'zcode', 'claude', 'dsh', 'antigravity', 'cursor'],
           description: 'Optional client filter',
         },
         limit: {

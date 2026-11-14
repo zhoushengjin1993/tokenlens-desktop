@@ -6,9 +6,17 @@ export const CLIENT_LABELS: Record<ClientType, string> = {
   claude: 'Claude',
   dsh: 'DSH',
   antigravity: 'Antigravity',
+  cursor: 'Cursor',
 };
 
-export const ALL_CLIENTS: ClientType[] = ['codex', 'zcode', 'claude', 'dsh', 'antigravity'];
+export const ALL_CLIENTS: ClientType[] = [
+  'codex',
+  'zcode',
+  'claude',
+  'dsh',
+  'antigravity',
+  'cursor',
+];
 
 export function formatTokens(n: number, estimated = false): string {
   const prefix = estimated ? '≈' : '';

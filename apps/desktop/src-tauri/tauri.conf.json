@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "pnpm --filter @tokenlens/web dev -- --host 127.0.0.1",
     "devUrl": "http://127.0.0.1:4790",
-    "beforeBuildCommand": "pnpm --filter @tokenlens/web build && node ../../scripts/prepare-desktop-server.mjs --with-node",
+    "beforeBuildCommand": "pnpm --filter @tokenlens/web build && node ../../scripts/prepare-desktop-server.mjs",
     "frontendDist": "../../web/dist"
   },
   "app": {

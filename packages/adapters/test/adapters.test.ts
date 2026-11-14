@@ -9,6 +9,7 @@ import {
   AntigravityAdapter,
   ClaudeAdapter,
   CodexAdapter,
+  CursorAdapter,
   DshAdapter,
   ZcodeAdapter,
 } from '../src/index.js';
@@ -187,5 +188,52 @@ describe('Phase 1 Multi-Client Adapters', () => {
     expect(turn.totalTokens).toBe(4510);
     expect(turn.durationMs).toBe(2500);
     expect(turn.status).toBe('completed');
+  });
+
+  it('CursorAdapter reads workspaceStorage state.vscdb and workspace.json', async () => {
+    const tmp = await makeTempDir('tokenlens-cursor-');
+    const wsDir = path.join(tmp, 'ws-1');
+    await fs.mkdir(wsDir, { recursive: true });
+    await fs.writeFile(
+      path.join(wsDir, 'workspace.json'),
+      JSON.stringify({ folder: 'file:///D:/workspace/cursor-demo' }),
+    );
+
+    const dbPath = path.join(wsDir, 'state.vscdb');
+    const db = new DatabaseSync(dbPath);
+    db.exec('CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value BLOB);');
+    db.prepare('INSERT INTO ItemTable (key, value) VALUES (?, ?)').run(
+      'workbench.panel.aichat.view.aichat.chatdata',
+      JSON.stringify({
+        tabs: [
+          {
+            tabId: 'cursor-tab-1',
+            chatTitle: 'Cursor Refactor',
+            bubbles: [
+              { type: 'user', text: 'Optimize Cursor adapter', timestamp: 1000 },
+              {
+                type: 'ai',
+                bubbleId: 'b-1',
+                text: 'Here is the optimized implementation.',
+                selectedModel: 'claude-4-sonnet',
+                tokenCount: { inputTokens: 1200, outputTokens: 240 },
+                timestamp: 2500,
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    db.close();
+
+    const adapter = new CursorAdapter({ watchPaths: [tmp] });
+    const turns = await adapter.scanOnce();
+    expect(turns).toHaveLength(1);
+    expect(turns[0].client).toBe('cursor');
+    expect(turns[0].projectName).toBe('cursor-demo');
+    expect(turns[0].sessionTitle).toBe('Cursor Refactor');
+    expect(turns[0].model).toBe('claude-4-sonnet');
+    expect(turns[0].inputTokens).toBe(1200);
+    expect(turns[0].outputTokens).toBe(240);
   });
 });

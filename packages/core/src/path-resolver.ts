@@ -33,6 +33,23 @@ export function getDefaultClientPaths(
       path.join(homeDir, '.gemini', 'antigravity', 'brain'),
       path.join(homeDir, '.gemini', 'antigravity', 'conversation_summaries.db'),
     ],
+    cursor: [
+      ...(platform === 'win32'
+        ? [
+            path.join(appData, 'Cursor', 'User', 'workspaceStorage'),
+            path.join(appData, 'Cursor', 'User', 'globalStorage', 'state.vscdb'),
+          ]
+        : platform === 'darwin'
+          ? [
+              path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'workspaceStorage'),
+              path.join(homeDir, 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage', 'state.vscdb'),
+            ]
+          : [
+              path.join(homeDir, '.config', 'Cursor', 'User', 'workspaceStorage'),
+              path.join(homeDir, '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb'),
+            ]),
+      path.join(homeDir, '.cursor', 'projects'),
+    ],
   };
 
   return base;
