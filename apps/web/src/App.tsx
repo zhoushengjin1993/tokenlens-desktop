@@ -1,11 +1,13 @@
 import { AnimatePresence } from 'framer-motion';
 import { useTokenStream } from './hooks/useTokenStream';
+import { useTauriBridge } from './hooks/useTauriBridge';
 import { useTokenStore } from './stores/useTokenStore';
 import { MiniPill } from './components/MiniPill';
 import { TurnDrawer } from './components/TurnDrawer';
 
 export function App() {
   useTokenStream();
+  useTauriBridge();
 
   const uiState = useTokenStore((s) => s.uiState);
   const setUiState = useTokenStore((s) => s.setUiState);
