@@ -1,0 +1,23 @@
+{
+  "name": "tokenlens-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cross-client AI Agent per-turn token monitor companion",
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "pnpm -r typecheck",
+    "build": "pnpm -r build",
+    "sim": "pnpm --filter @tokenlens/simulator sim"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.1.1"
+  }
+}

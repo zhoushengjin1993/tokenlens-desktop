@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Desktop / Tauri
+apps/desktop/src-tauri/target/
+
+# Environment & local logs
+.env
+.env.*
+*.log
+.tmp-replay/
+tmp/
+
+# Never commit raw SQLite databases or real local agent logs
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+*.zstd
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
