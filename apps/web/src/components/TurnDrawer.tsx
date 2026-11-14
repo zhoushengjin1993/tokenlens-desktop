@@ -25,6 +25,7 @@ import { ALL_CLIENTS, CLIENT_LABELS, formatDuration, formatTokens } from '../uti
 import { TurnDetail } from './TurnDetail';
 import { OnboardingCard } from './OnboardingCard';
 import { apiBaseUrl } from '../hooks/useTokenStream';
+import { useI18n } from '../utils/i18n';
 
 interface SessionGroup {
   sessionId: string;
@@ -145,6 +146,7 @@ function formatShortTime(ts: number): string {
 }
 
 export function TurnDrawer() {
+  const { locale, t } = useI18n();
   const turnsMap = useTokenStore((s) => s.turns);
   const health = useTokenStore((s) => s.health);
   const enabledClients = useTokenStore((s) => s.enabledClients);
@@ -163,6 +165,8 @@ export function TurnDrawer() {
   const showSettings = useTokenStore((s) => s.showSettings);
   const wsConnected = useTokenStore((s) => s.wsConnected);
 
+  const setLocale = useTokenStore((s) => s.setLocale);
+  const toggleLocale = useTokenStore((s) => s.toggleLocale);
   const toggleClientEnabled = useTokenStore((s) => s.toggleClientEnabled);
   const setProjectNameOverride = useTokenStore((s) => s.setProjectNameOverride);
   const setSelectedClient = useTokenStore((s) => s.setSelectedClient);
@@ -184,8 +188,11 @@ export function TurnDrawer() {
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState('');
 
-  const getProjectName = (projectId: string, fallback: string) =>
-    projectNameOverrides[projectId] || fallback;
+  const getProjectName = (projectId: string, fallback: string) => {
+    if (projectNameOverrides[projectId]) return projectNameOverrides[projectId];
+    if (projectId === '__global__') return t('unboundProjectName');
+    return fallback;
+  };
 
   const thresholdLabel = `${Math.round(spikeThreshold / 1000)}k`;
   const todayStart = new Date();
@@ -226,12 +233,12 @@ export function TurnDrawer() {
 
   const summary = summarizeTurns(scopedTurns);
   const summaryTitle = currentSession
-    ? '当前会话总计'
+    ? currentSession.sessionTitle
     : currentProject
-      ? `${getProjectName(currentProject.projectId, currentProject.projectName)} · 项目总计`
+      ? `${getProjectName(currentProject.projectId, currentProject.projectName)}${t('summaryProjectSuffix')}`
       : viewMode === 'archived'
-        ? `${CLIENT_LABELS[selectedClient]} · 已归档总计`
-        : `${CLIENT_LABELS[selectedClient]} · 活跃总计`;
+        ? `${CLIENT_LABELS[selectedClient]}${t('summaryArchivedSuffix')}`
+        : `${CLIENT_LABELS[selectedClient]}${t('summaryActiveSuffix')}`;
 
   const handleBack = () => {
     if (selectedSessionId) {
@@ -286,13 +293,22 @@ export function TurnDrawer() {
         <div className="flex items-center gap-1">
           <button
             type="button"
+            onClick={toggleLocale}
+            className="px-1.5 py-1 rounded-lg text-[10px] font-mono font-semibold bg-white/5 text-zinc-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+            title={t('switchLanguage')}
+          >
+            {locale === 'en' ? 'EN' : '中文'}
+          </button>
+
+          <button
+            type="button"
             onClick={toggleShowCost}
             className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
               showCost
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/25'
                 : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
             }`}
-            title={showCost ? '隐藏费用' : '显示费用'}
+            title={showCost ? t('hideCost') : t('showCost')}
           >
             <DollarSign className="w-3.5 h-3.5" />
           </button>
@@ -305,7 +321,7 @@ export function TurnDrawer() {
                 ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/25'
                 : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
             }`}
-            title={autoSwitch ? '自动跟随中' : '已锁定当前端'}
+            title={autoSwitch ? t('autoFollowing') : t('lockedClient')}
           >
             {autoSwitch ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
           </button>
@@ -316,7 +332,7 @@ export function TurnDrawer() {
             className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
               showSettings ? 'bg-amber-500/20 text-amber-300' : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
             }`}
-            title="预警阈值设置"
+            title={t('settingsTitle')}
           >
             <SlidersHorizontal className="w-3.5 h-3.5" />
           </button>
@@ -327,7 +343,7 @@ export function TurnDrawer() {
             className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
               showOnboarding ? 'bg-sky-500/20 text-sky-300' : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
             }`}
-            title="连接诊断"
+            title={t('diagnosticsTitle')}
           >
             <Stethoscope className="w-3.5 h-3.5" />
           </button>
@@ -336,7 +352,7 @@ export function TurnDrawer() {
             type="button"
             onClick={() => setUiState('pill')}
             className="p-1.5 rounded-lg bg-white/5 text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
-            title="收起为胶囊 (Alt+T)"
+            title={t('collapsePill')}
           >
             <ChevronUp className="w-3.5 h-3.5" />
           </button>
@@ -361,7 +377,7 @@ export function TurnDrawer() {
               key={client}
               type="button"
               onClick={() => setSelectedClient(client)}
-              title={`切换至 ${CLIENT_LABELS[client]}`}
+              title={t('switchToClient', { client: CLIENT_LABELS[client] })}
               className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-between gap-1 ${
                 active
                   ? 'bg-white/15 text-white border border-white/15 shadow-sm'
@@ -384,7 +400,7 @@ export function TurnDrawer() {
             <button
               type="button"
               onClick={() => setViewMode('active')}
-              title="查看活跃项目"
+              title={t('viewActiveProjects')}
               className={`py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                 viewMode === 'active'
                   ? 'bg-white/12 text-white shadow-sm'
@@ -392,12 +408,12 @@ export function TurnDrawer() {
               }`}
             >
               <Folder className="w-3 h-3" />
-              <span>活跃项目 ({projects.length})</span>
+              <span>{t('activeProjectsTab', { count: projects.length })}</span>
             </button>
             <button
               type="button"
               onClick={() => setViewMode('archived')}
-              title="查看已归档会话"
+              title={t('viewArchivedSessions')}
               className={`py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer flex items-center justify-center gap-1.5 ${
                 viewMode === 'archived'
                   ? 'bg-white/12 text-white shadow-sm'
@@ -405,7 +421,7 @@ export function TurnDrawer() {
               }`}
             >
               <Archive className="w-3 h-3" />
-              <span>已归档 ({archivedSessions.length})</span>
+              <span>{t('archivedTab', { count: archivedSessions.length })}</span>
             </button>
           </div>
 
@@ -414,33 +430,33 @@ export function TurnDrawer() {
               <button
                 type="button"
                 onClick={() => setTimeRange('all')}
-                title="显示全部时间"
+                title={t('showAllTime')}
                 className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
                   timeRange === 'all'
                     ? 'bg-white/12 text-zinc-100'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                全部
+                {t('filterAll')}
               </button>
               <button
                 type="button"
                 onClick={() => setTimeRange('today')}
-                title="仅显示今日消耗"
+                title={t('showTodayOnly')}
                 className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
                   timeRange === 'today'
                     ? 'bg-white/12 text-zinc-100'
                     : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                今日
+                {t('filterToday')}
               </button>
             </div>
 
             <button
               type="button"
               onClick={toggleOnlySpikes}
-              title={`仅看单轮输入 ≥${thresholdLabel} 的高耗记录`}
+              title={t('filterSpikeTip', { threshold: thresholdLabel })}
               className={`px-2 py-0.5 rounded-md border transition-colors cursor-pointer flex items-center gap-1 font-mono ${
                 onlySpikes
                   ? 'bg-orange-500/20 border-orange-400/40 text-orange-300'
@@ -448,7 +464,7 @@ export function TurnDrawer() {
               }`}
             >
               <AlertTriangle className="w-2.5 h-2.5" />
-              <span>仅看 &gt;{thresholdLabel}</span>
+              <span>{t('filterSpikeLabel', { threshold: thresholdLabel })}</span>
             </button>
           </div>
 
@@ -457,7 +473,7 @@ export function TurnDrawer() {
               <button
                 type="button"
                 onClick={handleBack}
-                title="返回上一级"
+                title={t('goBack')}
                 className="p-0.5 rounded hover:bg-white/10 text-zinc-300 cursor-pointer shrink-0"
               >
                 <ChevronLeft className="w-3.5 h-3.5" />
@@ -465,10 +481,10 @@ export function TurnDrawer() {
               <button
                 type="button"
                 onClick={goRoot}
-                title="返回列表"
+                title={t('goRoot')}
                 className="hover:text-zinc-200 cursor-pointer shrink-0"
               >
-                {viewMode === 'archived' ? '已归档' : '活跃项目'}
+                {viewMode === 'archived' ? t('breadcrumbArchived') : t('breadcrumbActive')}
               </button>
               {currentProject && viewMode === 'active' && (
                 <>
@@ -476,7 +492,7 @@ export function TurnDrawer() {
                   <button
                     type="button"
                     onClick={() => selectSession(null)}
-                    title="返回项目会话"
+                    title={t('backToProject')}
                     className={`truncate cursor-pointer ${
                       currentSession ? 'hover:text-zinc-200' : 'text-zinc-100 font-medium'
                     }`}
@@ -504,10 +520,34 @@ export function TurnDrawer() {
           <div className="p-3 space-y-3">
             <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
               <div>
-                <div className="text-xs font-semibold text-zinc-100">高耗预警阈值 (Spike)</div>
-                <div className="text-[11px] text-zinc-400 mt-0.5">
-                  单轮输入 Token 达到该阈值时触发橙色预警提示
-                </div>
+                <div className="text-xs font-semibold text-zinc-100">{t('languageTitle')}</div>
+                <div className="text-[11px] text-zinc-400 mt-0.5">{t('languageDesc')}</div>
+              </div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {(['en', 'zh'] as const).map((lang) => {
+                  const active = locale === lang;
+                  return (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setLocale(lang)}
+                      className={`py-1.5 rounded-lg text-xs border transition-colors cursor-pointer ${
+                        active
+                          ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-200 font-semibold'
+                          : 'bg-white/[0.03] border-white/10 text-zinc-300 hover:bg-white/10'
+                      }`}
+                    >
+                      {lang === 'en' ? 'English' : '简体中文'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
+              <div>
+                <div className="text-xs font-semibold text-zinc-100">{t('spikeThresholdTitle')}</div>
+                <div className="text-[11px] text-zinc-400 mt-0.5">{t('spikeThresholdDesc')}</div>
               </div>
               <div className="grid grid-cols-4 gap-1.5">
                 {[30_000, 50_000, 80_000, 100_000].map((val) => {
@@ -532,10 +572,8 @@ export function TurnDrawer() {
 
             <div className="rounded-xl bg-white/[0.04] border border-white/10 p-3 space-y-2.5">
               <div>
-                <div className="text-xs font-semibold text-zinc-100">工具栏显示列表</div>
-                <div className="text-[11px] text-zinc-400 mt-0.5">
-                  勾选需要在顶部标签栏中显示的工具（至少保留一项）
-                </div>
+                <div className="text-xs font-semibold text-zinc-100">{t('visibleToolsTitle')}</div>
+                <div className="text-[11px] text-zinc-400 mt-0.5">{t('visibleToolsDesc')}</div>
               </div>
               <div className="grid grid-cols-2 gap-1.5">
                 {ALL_CLIENTS.map((client) => {
@@ -546,8 +584,10 @@ export function TurnDrawer() {
                       key={client}
                       title={
                         isLast
-                          ? '至少保留一个工具'
-                          : `${checked ? '隐藏' : '显示'} ${CLIENT_LABELS[client]}`
+                          ? t('keepAtLeastOne')
+                          : checked
+                            ? t('hideTool', { client: CLIENT_LABELS[client] })
+                            : t('showTool', { client: CLIENT_LABELS[client] })
                       }
                       className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border text-xs transition-colors ${
                         checked
@@ -589,13 +629,16 @@ export function TurnDrawer() {
                 </div>
               </div>
               <div className="text-right shrink-0">
-                <div className="text-[10px] uppercase tracking-wider text-zinc-400">缓存命中</div>
+                <div className="text-[10px] uppercase tracking-wider text-zinc-400">
+                  {t('cacheHitLabel')}
+                </div>
                 <div className="text-sm font-mono font-semibold text-emerald-400 mt-0.5">
                   {summary.cacheHitRate}% · {formatTokens(summary.cachedTokens, summary.hasEstimated)}
                 </div>
                 {showCost && (
                   <div className="text-[10px] font-mono text-emerald-300/80">
-                    已省 ${summary.savingsUsd.toFixed(4)}
+                    {t('savedPrefix')}
+                    {summary.savingsUsd.toFixed(4)}
                   </div>
                 )}
               </div>
@@ -619,7 +662,7 @@ export function TurnDrawer() {
                       <button
                         type="button"
                         onClick={() => setExpandedTurnKey(key)}
-                        title="展开/收起轮次详情"
+                        title={t('expandTurnTip')}
                         className="w-full text-left p-2.5 space-y-1.5 cursor-pointer"
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -639,13 +682,13 @@ export function TurnDrawer() {
                             {turn.inputTokens >= spikeThreshold && (
                               <span
                                 className="px-1 py-0.2 rounded bg-orange-500/15 border border-orange-400/30 text-[9px] font-mono text-orange-300 shrink-0"
-                                title={`输入激增 >${thresholdLabel}，建议优化上下文`}
+                                title={t('spikeTurnTip', { threshold: thresholdLabel })}
                               >
                                 &gt;{thresholdLabel}
                               </span>
                             )}
                             <span className="text-xs text-zinc-300 truncate">
-                              {turn.promptSummary || '(无摘要)'}
+                              {turn.promptSummary || t('noSummary')}
                             </span>
                           </div>
                           <div className="font-mono text-[11px] shrink-0 flex items-center gap-1.5">
@@ -681,7 +724,7 @@ export function TurnDrawer() {
               /* Level 3: Archived Sessions (with original project badge) */
               archivedSessions.length === 0 ? (
                 <div className="py-12 text-center text-xs text-zinc-400">
-                  暂无 {CLIENT_LABELS[selectedClient]} 已归档会话
+                  {t('noArchivedSessions', { client: CLIENT_LABELS[selectedClient] })}
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -694,7 +737,7 @@ export function TurnDrawer() {
                         key={sess.sessionId}
                         type="button"
                         onClick={() => selectSession(sess.sessionId)}
-                        title="查看归档详情"
+                        title={t('viewArchivedDetail')}
                         className="w-full text-left rounded-xl bg-white/[0.03] border border-white/10 p-2.5 hover:border-white/20 transition-colors cursor-pointer space-y-1.5"
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -713,8 +756,8 @@ export function TurnDrawer() {
                             <span className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-300 truncate max-w-[140px]">
                               {getProjectName(sess.projectId, sess.projectName)}
                             </span>
-                            <span>{sess.turns.length} 轮</span>
-                            <span>缓存 {hitRate}%</span>
+                            <span>{t('turnsCount', { count: sess.turns.length })}</span>
+                            <span>{t('cachePct', { pct: hitRate })}</span>
                           </div>
                           <span className="font-mono shrink-0">
                             {formatShortTime(sess.archivedAt ?? sess.latestUpdatedAt)}
@@ -737,7 +780,7 @@ export function TurnDrawer() {
                       key={sess.sessionId}
                       type="button"
                       onClick={() => selectSession(sess.sessionId)}
-                      title="查看逐轮详情"
+                      title={t('viewTurnDetail')}
                       className="w-full text-left rounded-xl bg-white/[0.03] border border-white/10 p-2.5 hover:border-white/20 transition-colors cursor-pointer space-y-1.5"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -758,8 +801,8 @@ export function TurnDrawer() {
                               {sess.model}
                             </span>
                           )}
-                          <span>{sess.turns.length} 轮</span>
-                          <span>缓存 {hitRate}%</span>
+                          <span>{t('turnsCount', { count: sess.turns.length })}</span>
+                          <span>{t('cachePct', { pct: hitRate })}</span>
                         </div>
                         <span className="font-mono shrink-0">
                           {formatShortTime(sess.latestUpdatedAt)}
@@ -772,15 +815,15 @@ export function TurnDrawer() {
             ) : projects.length === 0 ? (
               <div className="py-12 text-center space-y-2">
                 <div className="text-xs text-zinc-400">
-                  暂无 {CLIENT_LABELS[selectedClient]} 活跃项目记录
+                  {t('noActiveProjects', { client: CLIENT_LABELS[selectedClient] })}
                 </div>
                 <button
                   type="button"
                   onClick={handleStartSim}
-                  title="启动回放演示"
+                  title={t('startReplayDemo')}
                   className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-zinc-300 cursor-pointer"
                 >
-                  运行回放模拟器测试
+                  {t('runReplayTest')}
                 </button>
               </div>
             ) : (
@@ -812,7 +855,7 @@ export function TurnDrawer() {
                           selectProject(proj.projectId);
                         }
                       }}
-                      title={isEditing ? undefined : '查看项目会话'}
+                      title={isEditing ? undefined : t('viewProjectSessions')}
                       className="group w-full text-left rounded-xl bg-white/[0.03] border border-white/10 p-2.5 hover:border-white/20 transition-colors cursor-pointer space-y-1.5"
                     >
                       <div className="flex items-center justify-between gap-2">
@@ -837,13 +880,13 @@ export function TurnDrawer() {
                                   }
                                 }}
                                 autoFocus
-                                placeholder={proj.projectName}
+                                placeholder={displayName}
                                 className="flex-1 min-w-0 px-1.5 py-0.5 rounded bg-black/40 border border-white/20 text-xs text-zinc-100 outline-none focus:border-emerald-400/60"
                               />
                               <button
                                 type="button"
                                 onClick={commitRename}
-                                title="保存名称"
+                                title={t('saveName')}
                                 className="p-0.5 rounded hover:bg-emerald-500/20 text-emerald-400 cursor-pointer shrink-0"
                               >
                                 <Check className="w-3.5 h-3.5" />
@@ -851,7 +894,7 @@ export function TurnDrawer() {
                               <button
                                 type="button"
                                 onClick={() => setEditingProjectId(null)}
-                                title="取消"
+                                title={t('cancel')}
                                 className="p-0.5 rounded hover:bg-white/10 text-zinc-400 cursor-pointer shrink-0"
                               >
                                 <X className="w-3.5 h-3.5" />
@@ -869,7 +912,7 @@ export function TurnDrawer() {
                                   setEditingProjectId(proj.projectId);
                                   setEditingProjectName(displayName);
                                 }}
-                                title="重命名项目"
+                                title={t('renameProject')}
                                 className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 text-zinc-400 hover:text-zinc-200 transition-opacity cursor-pointer shrink-0"
                               >
                                 <Pencil className="w-3 h-3" />
@@ -883,12 +926,14 @@ export function TurnDrawer() {
                       </div>
                       <div className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
                         <div className="flex items-center gap-2">
-                          <span>{proj.sessions.length} 会话</span>
-                          <span>{proj.turnCount} 轮</span>
-                          <span className="text-emerald-400/90">缓存 {hitRate}%</span>
+                          <span>{t('sessionsCount', { count: proj.sessions.length })}</span>
+                          <span>{t('turnsCount', { count: proj.turnCount })}</span>
+                          <span className="text-emerald-400/90">
+                            {t('cachePct', { pct: hitRate })}
+                          </span>
                         </div>
                         <span className="font-mono truncate max-w-[150px]">
-                          {proj.projectPath || '全局/未绑定'}
+                          {proj.projectPath || t('globalUnbound')}
                         </span>
                       </div>
                     </div>

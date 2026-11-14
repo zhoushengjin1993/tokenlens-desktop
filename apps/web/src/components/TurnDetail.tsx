@@ -3,12 +3,14 @@ import { AlertTriangle, Cpu, GitBranch, Wrench } from 'lucide-react';
 import type { UnifiedTurnUsage } from '@tokenlens/core';
 import { useTokenStore } from '../stores/useTokenStore';
 import { formatDuration, formatTokens } from '../utils/format';
+import { useI18n } from '../utils/i18n';
 
 interface TurnDetailProps {
   turn: UnifiedTurnUsage;
 }
 
 export function TurnDetail({ turn }: TurnDetailProps) {
+  const { t } = useI18n();
   const spikeThreshold = useTokenStore((s) => s.spikeThreshold);
   const thresholdLabel = `${Math.round(spikeThreshold / 1000)}k`;
   const isEstimated = turn.usageAccuracy === 'estimated';
@@ -30,7 +32,7 @@ export function TurnDetail({ turn }: TurnDetailProps) {
         )}
         {isEstimated && (
           <span className="px-1.5 py-0.5 rounded bg-sky-500/15 border border-sky-400/30 text-sky-300">
-            ≈ 本地估算
+            {t('estimatedBadge')}
           </span>
         )}
         {turn.compacted && (
@@ -41,7 +43,7 @@ export function TurnDetail({ turn }: TurnDetailProps) {
         {isSpike && (
           <span
             className="px-1.5 py-0.5 rounded bg-orange-500/15 border border-orange-400/30 text-orange-300 flex items-center gap-1"
-            title={`单轮输入 ≥${thresholdLabel}，建议精简上下文`}
+            title={t('spikeBadgeTip', { threshold: thresholdLabel })}
           >
             <AlertTriangle className="w-3 h-3" /> Spike &gt;{thresholdLabel}
           </span>
@@ -50,7 +52,7 @@ export function TurnDetail({ turn }: TurnDetailProps) {
 
       {isSpike && (
         <div className="rounded-lg bg-orange-500/10 border border-orange-400/25 px-2.5 py-1.5 text-[10px] text-orange-200/90 leading-relaxed">
-          ⚠ 单轮输入已超 {thresholdLabel}，建议减少整文件读取、清理无关历史或新开会话以节省 Token。
+          {t('spikeWarningText', { threshold: thresholdLabel })}
         </div>
       )}
 

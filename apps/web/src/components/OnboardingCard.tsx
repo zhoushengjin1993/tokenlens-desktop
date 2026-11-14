@@ -2,6 +2,7 @@ import { CheckCircle2, CircleDashed, RefreshCw } from 'lucide-react';
 import type { AdapterHealth } from '@tokenlens/core';
 import { useTokenStore } from '../stores/useTokenStore';
 import { CLIENT_LABELS } from '../utils/format';
+import { useI18n } from '../utils/i18n';
 
 interface OnboardingCardProps {
   health: AdapterHealth[];
@@ -10,6 +11,7 @@ interface OnboardingCardProps {
 }
 
 export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCardProps) {
+  const { t } = useI18n();
   const enabledClients = useTokenStore((s) => s.enabledClients);
   const toggleClientEnabled = useTokenStore((s) => s.toggleClientEnabled);
 
@@ -17,14 +19,14 @@ export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCard
     <div className="p-3 space-y-2.5">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs font-semibold text-zinc-100">零配置客户端探测</div>
-          <div className="text-[11px] text-zinc-400">可勾选要在顶部工具栏显示的工具</div>
+          <div className="text-xs font-semibold text-zinc-100">{t('onboardingTitle')}</div>
+          <div className="text-[11px] text-zinc-400">{t('onboardingDesc')}</div>
         </div>
         <button
           type="button"
           onClick={onRefresh}
           className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors cursor-pointer"
-          title="重新扫描"
+          title={t('rescan')}
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </button>
@@ -42,7 +44,7 @@ export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCard
                 type="checkbox"
                 checked={checked}
                 onChange={() => toggleClientEnabled(item.client)}
-                title={checked ? '取消勾选则隐藏该工具Tab' : '勾选后在工具栏显示'}
+                title={checked ? t('uncheckToHide') : t('checkToShow')}
                 className="mt-0.5 accent-emerald-500 cursor-pointer shrink-0"
               />
               {item.available ? (
@@ -60,7 +62,7 @@ export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCard
                         : 'text-zinc-500 text-[10px]'
                     }
                   >
-                    {item.available ? '已连接' : '未检测到'}
+                    {item.available ? t('connected') : t('notDetected')}
                   </span>
                 </div>
                 {item.detectedPaths.length > 0 && (
@@ -81,9 +83,9 @@ export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCard
         type="button"
         onClick={onStartSim}
         className="w-full py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/30 text-emerald-200 text-xs font-medium transition-colors cursor-pointer"
-        title="启动回放演示"
+        title={t('startReplayDemo')}
       >
-        启动 LogReplaySimulator 回放演示
+        {t('startSimulatorBtn')}
       </button>
     </div>
   );

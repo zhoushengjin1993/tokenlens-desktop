@@ -129,6 +129,35 @@ fn ensure_backend_running(app: &tauri::AppHandle) -> Option<Child> {
         }
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        let mut candidates = vec![
+            PathBuf::from("/opt/homebrew/bin/node"),
+            PathBuf::from("/usr/local/bin/node"),
+        ];
+        if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+            candidates.push(home.join(".volta/bin/node"));
+            let nvm_dir = home.join(".nvm/versions/node");
+            if let Ok(entries) = std::fs::read_dir(&nvm_dir) {
+                let mut nvm_bins: Vec<PathBuf> = entries
+                    .flatten()
+                    .map(|e| e.path().join("bin/node"))
+                    .filter(|p| p.exists())
+                    .collect();
+                nvm_bins.sort();
+                nvm_bins.reverse();
+                candidates.extend(nvm_bins);
+            }
+        }
+        for candidate in candidates {
+            if candidate.exists() {
+                if let Ok(child) = spawn_node_server(&candidate, &cli_path) {
+                    return Some(child);
+                }
+            }
+        }
+    }
+
     None
 }
 

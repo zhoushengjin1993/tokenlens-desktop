@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AdapterHealth, ClientType, UnifiedTurnUsage } from '@tokenlens/core';
 import { ALL_CLIENTS } from '../utils/format';
+import type { Locale } from '../utils/i18n';
 
 export type UiState = 'pill' | 'drawer';
 export type ViewMode = 'active' | 'archived';
@@ -9,6 +10,17 @@ export type TimeRange = 'all' | 'today';
 const SPIKE_STORAGE_KEY = 'tokenlens_spike_threshold';
 const ENABLED_CLIENTS_KEY = 'tokenlens_enabled_clients';
 const PROJECT_NAMES_KEY = 'tokenlens_project_names';
+const LOCALE_STORAGE_KEY = 'tokenlens_locale';
+
+function loadInitialLocale(): Locale {
+  try {
+    const raw = window.localStorage.getItem(LOCALE_STORAGE_KEY);
+    if (raw === 'zh' || raw === 'en') return raw;
+  } catch {
+    // Ignore storage error
+  }
+  return 'en';
+}
 
 function loadInitialSpikeThreshold(): number {
   try {
@@ -57,6 +69,7 @@ function loadInitialProjectNames(): Record<string, string> {
 interface TokenStoreState {
   turns: Record<string, UnifiedTurnUsage>;
   health: AdapterHealth[];
+  locale: Locale;
   enabledClients: ClientType[];
   projectNameOverrides: Record<string, string>;
   selectedClient: ClientType;
@@ -77,6 +90,8 @@ interface TokenStoreState {
   setInit: (turns: UnifiedTurnUsage[], health: AdapterHealth[], activeClient: ClientType | null) => void;
   upsertTurn: (turn: UnifiedTurnUsage, activeClient: ClientType) => void;
   setHealth: (health: AdapterHealth[]) => void;
+  setLocale: (locale: Locale) => void;
+  toggleLocale: () => void;
   toggleClientEnabled: (client: ClientType) => void;
   setProjectNameOverride: (projectId: string, name: string) => void;
   setSelectedClient: (client: ClientType) => void;
@@ -106,6 +121,7 @@ const initialEnabledClients = loadInitialEnabledClients();
 export const useTokenStore = create<TokenStoreState>((set) => ({
   turns: {},
   health: [],
+  locale: loadInitialLocale(),
   enabledClients: initialEnabledClients,
   projectNameOverrides: loadInitialProjectNames(),
   selectedClient: initialEnabledClients[0] ?? 'codex',
@@ -156,6 +172,24 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
     }),
 
   setHealth: (health) => set({ health }),
+  setLocale: (locale) => {
+    try {
+      window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // Ignore storage error
+    }
+    set({ locale });
+  },
+  toggleLocale: () =>
+    set((state) => {
+      const next: Locale = state.locale === 'en' ? 'zh' : 'en';
+      try {
+        window.localStorage.setItem(LOCALE_STORAGE_KEY, next);
+      } catch {
+        // Ignore storage error
+      }
+      return { locale: next };
+    }),
   toggleClientEnabled: (client) =>
     set((state) => {
       const exists = state.enabledClients.includes(client);
