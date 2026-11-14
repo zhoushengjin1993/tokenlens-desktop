@@ -37,19 +37,31 @@ fn is_backend_listening() -> bool {
     TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
 }
 
+fn normalize_path(p: PathBuf) -> PathBuf {
+    #[cfg(windows)]
+    {
+        let s = p.to_string_lossy();
+        if let Some(stripped) = s.strip_prefix(r"\\?\") {
+            return PathBuf::from(stripped);
+        }
+    }
+    p
+}
+
 fn resolve_server_command(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf)> {
     let node_name = if cfg!(windows) { "node.exe" } else { "node" };
 
     if let Ok(res_dir) = app.path().resource_dir() {
+        let res_dir = normalize_path(res_dir);
         for sub in ["resources/server", "server"] {
             let dir = res_dir.join(sub);
             let bundled_node = dir.join(node_name);
             let bundled_cli = dir.join("cli.cjs");
             if bundled_node.exists() && bundled_cli.exists() {
-                return Some((bundled_node, bundled_cli));
+                return Some((normalize_path(bundled_node), normalize_path(bundled_cli)));
             }
             if bundled_cli.exists() {
-                return Some((PathBuf::from("node"), bundled_cli));
+                return Some((PathBuf::from("node"), normalize_path(bundled_cli)));
             }
         }
     }
@@ -57,7 +69,7 @@ fn resolve_server_command(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf)> 
     let manifest_cli = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../../packages/server/dist/cli.js");
     if manifest_cli.exists() {
-        return Some((PathBuf::from("node"), manifest_cli));
+        return Some((PathBuf::from("node"), normalize_path(manifest_cli)));
     }
 
     if let Ok(exe) = std::env::current_exe() {
@@ -66,7 +78,11 @@ fn resolve_server_command(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf)> 
             if let Some(d) = dir {
                 let candidate = d.join("packages/server/dist/cli.js");
                 if candidate.exists() {
-                    return Some((PathBuf::from("node"), candidate));
+                    return Some((PathBuf::from("node"), normalize_path(candidate)));
+                }
+                let direct_cli = d.join("resources/server/cli.cjs");
+                if direct_cli.exists() {
+                    return Some((PathBuf::from("node"), normalize_path(direct_cli)));
                 }
                 dir = d.parent();
             }
@@ -76,14 +92,9 @@ fn resolve_server_command(app: &tauri::AppHandle) -> Option<(PathBuf, PathBuf)> 
     None
 }
 
-fn ensure_backend_running(app: &tauri::AppHandle) -> Option<Child> {
-    if is_backend_listening() {
-        return None;
-    }
-
-    let (node_bin, cli_path) = resolve_server_command(app)?;
-    let mut cmd = Command::new(&node_bin);
-    cmd.arg(&cli_path)
+fn spawn_node_server(node_bin: &PathBuf, cli_path: &PathBuf) -> std::io::Result<Child> {
+    let mut cmd = Command::new(node_bin);
+    cmd.arg(cli_path)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null());
@@ -95,7 +106,30 @@ fn ensure_backend_running(app: &tauri::AppHandle) -> Option<Child> {
         cmd.creation_flags(CREATE_NO_WINDOW);
     }
 
-    cmd.spawn().ok()
+    cmd.spawn()
+}
+
+fn ensure_backend_running(app: &tauri::AppHandle) -> Option<Child> {
+    if is_backend_listening() {
+        return None;
+    }
+
+    let (node_bin, cli_path) = resolve_server_command(app)?;
+    if let Ok(child) = spawn_node_server(&node_bin, &cli_path) {
+        return Some(child);
+    }
+
+    #[cfg(windows)]
+    {
+        let fallback_node = PathBuf::from(r"C:\Program Files\nodejs\node.exe");
+        if fallback_node.exists() {
+            if let Ok(child) = spawn_node_server(&fallback_node, &cli_path) {
+                return Some(child);
+            }
+        }
+    }
+
+    None
 }
 
 #[tauri::command]
