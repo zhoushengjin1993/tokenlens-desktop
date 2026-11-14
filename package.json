@@ -4,6 +4,9 @@
   "private": true,
   "description": "Cross-client AI Agent per-turn token monitor companion",
   "type": "module",
+  "bin": {
+    "tokenlens-desktop": "./packages/server/dist/cli.js"
+  },
   "packageManager": "pnpm@12.18.0",
   "engines": {
     "node": ">=22.0.0"

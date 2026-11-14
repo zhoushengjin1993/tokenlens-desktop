@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, ChevronUp, Lock, LockOpen, Stethoscope } from 'lucide-react';
+import { Activity, ChevronUp, DollarSign, Lock, LockOpen, Stethoscope } from 'lucide-react';
+import { calculateTurnCost } from '@tokenlens/core/pricing';
 import { useTokenStore, turnCompositeKey } from '../stores/useTokenStore';
 import { ALL_CLIENTS, CLIENT_LABELS, formatDuration, formatTokens } from '../utils/format';
 import { TurnDetail } from './TurnDetail';
@@ -10,12 +11,14 @@ export function TurnDrawer() {
   const health = useTokenStore((s) => s.health);
   const selectedClient = useTokenStore((s) => s.selectedClient);
   const autoSwitch = useTokenStore((s) => s.autoSwitch);
+  const showCost = useTokenStore((s) => s.showCost);
   const expandedTurnKey = useTokenStore((s) => s.expandedTurnKey);
   const showOnboarding = useTokenStore((s) => s.showOnboarding);
   const wsConnected = useTokenStore((s) => s.wsConnected);
 
   const setSelectedClient = useTokenStore((s) => s.setSelectedClient);
   const toggleAutoSwitch = useTokenStore((s) => s.toggleAutoSwitch);
+  const toggleShowCost = useTokenStore((s) => s.toggleShowCost);
   const setUiState = useTokenStore((s) => s.setUiState);
   const setExpandedTurnKey = useTokenStore((s) => s.setExpandedTurnKey);
   const setShowOnboarding = useTokenStore((s) => s.setShowOnboarding);
@@ -29,6 +32,10 @@ export function TurnDrawer() {
   const totalInputBase = clientTurns.reduce((acc, t) => acc + t.inputTokens + t.cachedTokens, 0);
   const cacheHitRate = totalInputBase > 0 ? Math.round((totalCachedTokens / totalInputBase) * 100) : 0;
   const hasEstimated = clientTurns.some((t) => t.usageAccuracy === 'estimated');
+  const totalSavingsUsd = clientTurns.reduce(
+    (acc, t) => acc + calculateTurnCost(t).cacheSavingsUsd,
+    0,
+  );
 
   const handleRefreshHealth = async () => {
     try {
@@ -68,6 +75,19 @@ export function TurnDrawer() {
         </div>
 
         <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleShowCost}
+            className={`p-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+              showCost
+                ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-400/25'
+                : 'bg-white/5 text-zinc-400 hover:text-zinc-200'
+            }`}
+            title={showCost ? '隐藏费率与缓存节省金额' : '显示费率与缓存节省金额'}
+          >
+            <DollarSign className="w-3.5 h-3.5" />
+          </button>
+
           <button
             type="button"
             onClick={toggleAutoSwitch}
@@ -159,6 +179,11 @@ export function TurnDrawer() {
                 <div className="text-sm font-mono font-semibold text-emerald-400 mt-0.5">
                   {cacheHitRate}% · {formatTokens(totalCachedTokens, hasEstimated)}
                 </div>
+                {showCost && (
+                  <div className="text-[10px] font-mono text-emerald-300/80">
+                    已省 ${totalSavingsUsd.toFixed(4)}
+                  </div>
+                )}
               </div>
             </div>
 
