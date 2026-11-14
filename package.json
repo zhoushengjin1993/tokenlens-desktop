@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
-    "sim": "pnpm --filter @tokenlens/simulator sim"
+    "sim": "pnpm --filter @tokenlens/simulator sim",
+    "desktop": "pnpm --filter @tokenlens/server build && pnpm --filter @tokenlens/desktop dev"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,8 +1,13 @@
+use std::net::{SocketAddr, TcpStream};
+use std::path::PathBuf;
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
 use tauri::{
     menu::{Menu, MenuItem},
     tray::TrayIconBuilder,
-    Emitter, LogicalPosition, LogicalSize, Manager, Position, Size, WebviewWindow,
+    Emitter, LogicalPosition, LogicalSize, Manager, Position, RunEvent, Size, WebviewWindow,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
@@ -13,6 +18,73 @@ const PILL_HEIGHT: f64 = 52.0;
 const DRAWER_WIDTH: f64 = 416.0;
 const DRAWER_HEIGHT: f64 = 632.0;
 const EDGE_MARGIN: f64 = 16.0;
+
+struct BackendProcess(Mutex<Option<Child>>);
+
+impl BackendProcess {
+    fn kill_if_running(&self) {
+        if let Ok(mut guard) = self.0.lock() {
+            if let Some(mut child) = guard.take() {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
+fn is_backend_listening() -> bool {
+    let addr: SocketAddr = "127.0.0.1:4789".parse().expect("valid socket addr");
+    TcpStream::connect_timeout(&addr, Duration::from_millis(200)).is_ok()
+}
+
+fn find_server_cli() -> Option<PathBuf> {
+    let manifest_candidate = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../packages/server/dist/cli.js");
+    if manifest_candidate.exists() {
+        return Some(manifest_candidate);
+    }
+
+    if let Ok(exe) = std::env::current_exe() {
+        let mut dir = exe.parent();
+        for _ in 0..6 {
+            if let Some(d) = dir {
+                let candidate = d.join("packages/server/dist/cli.js");
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+                let bundled = d.join("server/cli.js");
+                if bundled.exists() {
+                    return Some(bundled);
+                }
+                dir = d.parent();
+            }
+        }
+    }
+
+    None
+}
+
+fn ensure_backend_running() -> Option<Child> {
+    if is_backend_listening() {
+        return None;
+    }
+
+    let cli_path = find_server_cli()?;
+    let mut cmd = Command::new("node");
+    cmd.arg(&cli_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    cmd.spawn().ok()
+}
 
 #[tauri::command]
 fn set_pill_mode(window: WebviewWindow, is_pill: bool) -> Result<(), String> {
@@ -37,8 +109,12 @@ fn set_pill_mode(window: WebviewWindow, is_pill: bool) -> Result<(), String> {
         let cur_x = pos.x as f64 / scale;
         let cur_y = pos.y as f64 / scale;
 
-        let clamped_x = cur_x.min((work_w - target_w - EDGE_MARGIN).max(EDGE_MARGIN)).max(EDGE_MARGIN);
-        let clamped_y = cur_y.min((work_h - target_h - EDGE_MARGIN).max(EDGE_MARGIN)).max(EDGE_MARGIN);
+        let clamped_x = cur_x
+            .min((work_w - target_w - EDGE_MARGIN).max(EDGE_MARGIN))
+            .max(EDGE_MARGIN);
+        let clamped_y = cur_y
+            .min((work_h - target_h - EDGE_MARGIN).max(EDGE_MARGIN))
+            .max(EDGE_MARGIN);
 
         let _ = window.set_position(Position::Logical(LogicalPosition::new(clamped_x, clamped_y)));
     }
@@ -56,7 +132,8 @@ fn set_click_through(window: WebviewWindow, ignore: bool) -> Result<(), String> 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
+        .manage(BackendProcess(Mutex::new(None)))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
@@ -84,6 +161,13 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            // Auto-start local @tokenlens/server if port 4789 is not already listening
+            if let Some(child) = ensure_backend_running() {
+                if let Ok(mut guard) = app.state::<BackendProcess>().0.lock() {
+                    *guard = Some(child);
+                }
+            }
+
             // Position window at top-right corner on initial launch
             if let Some(win) = app.get_webview_window("main") {
                 if let (Ok(Some(monitor)), Ok(scale)) = (win.current_monitor(), win.scale_factor()) {
@@ -102,13 +186,19 @@ pub fn run() {
                 .register(Shortcut::new(Some(Modifiers::ALT | Modifiers::SHIFT), Code::KeyT));
 
             // System Tray menu
-            let toggle_item = MenuItem::with_id(app, "toggle", "展开/收起 (Alt+T)", true, None::<&str>)?;
-            let passthrough_item =
-                MenuItem::with_id(app, "passthrough", "切换鼠标穿透 (Alt+Shift+T)", true, None::<&str>)?;
+            let toggle_item =
+                MenuItem::with_id(app, "toggle", "展开/收起 (Alt+T)", true, None::<&str>)?;
+            let passthrough_item = MenuItem::with_id(
+                app,
+                "passthrough",
+                "切换鼠标穿透 (Alt+Shift+T)",
+                true,
+                None::<&str>,
+            )?;
             let quit_item = MenuItem::with_id(app, "quit", "退出 TokenLens", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&toggle_item, &passthrough_item, &quit_item])?;
 
-            TrayIconBuilder::new()
+            let mut tray_builder = TrayIconBuilder::new()
                 .menu(&menu)
                 .tooltip("TokenLens Desktop")
                 .on_menu_event(|app, event| match event.id.as_ref() {
@@ -126,14 +216,28 @@ pub fn run() {
                             let _ = win.emit("tokenlens://click-through", next);
                         }
                     }
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        app.state::<BackendProcess>().kill_if_running();
+                        app.exit(0);
+                    }
                     _ => {}
-                })
-                .build(app)?;
+                });
+
+            if let Some(icon) = app.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+            }
+
+            tray_builder.build(app)?;
 
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![set_pill_mode, set_click_through])
-        .run(tauri::generate_context!())
-        .expect("error while running TokenLens Desktop");
+        .build(tauri::generate_context!())
+        .expect("error while building TokenLens Desktop");
+
+    app.run(|app_handle, event| {
+        if let RunEvent::Exit = event {
+            app_handle.state::<BackendProcess>().kill_if_running();
+        }
+    });
 }

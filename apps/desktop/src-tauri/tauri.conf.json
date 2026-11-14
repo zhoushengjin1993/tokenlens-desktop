@@ -15,8 +15,8 @@
       {
         "label": "main",
         "title": "TokenLens",
-        "width": 360,
-        "height": 580,
+        "width": 416,
+        "height": 632,
         "decorations": false,
         "transparent": true,
         "alwaysOnTop": true,
