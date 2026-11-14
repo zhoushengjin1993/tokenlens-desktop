@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import chokidar, { type FSWatcher } from 'chokidar';
 import {
@@ -11,11 +13,23 @@ import {
 } from '@tokenlens/core';
 import { ByteOffsetTailer } from './utils/jsonl-tail.js';
 import { findFiles, truncatePrompt } from './utils/fs-walk.js';
+import { isSqliteBusyError, openReadOnlySqlite } from './utils/sqlite-ro.js';
+
+interface CodexThreadMeta {
+  title?: string;
+  cwd?: string;
+  archived: boolean;
+  archivedAt?: number;
+}
 
 interface CodexSessionContext {
   sessionId: string;
   sourceMode: SourceMode;
   currentTurnId: string;
+  projectPath?: string;
+  sessionTitle?: string;
+  archived: boolean;
+  archivedAt?: number;
   model?: string;
   turnStartedAt?: number;
   lastPrompt?: string;
@@ -31,10 +45,16 @@ export class CodexAdapter extends BaseLogAdapter {
   readonly client: ClientType = 'codex';
   private readonly tailer = new ByteOffsetTailer();
   private readonly contexts = new Map<string, CodexSessionContext>();
+  private readonly threadMeta = new Map<string, CodexThreadMeta>();
   private watcher: FSWatcher | null = null;
 
   getDefaultPaths(): string[] {
-    return this.options.watchPaths ?? [getDefaultClientPaths().codex[0]];
+    return (
+      this.options.watchPaths ?? [
+        getDefaultClientPaths().codex[0],
+        path.join(os.homedir(), '.codex', 'archived_sessions'),
+      ]
+    );
   }
 
   async checkHealth(): Promise<AdapterHealth> {
@@ -76,6 +96,7 @@ export class CodexAdapter extends BaseLogAdapter {
   }
 
   async scanOnce(): Promise<UnifiedTurnUsage[]> {
+    await this.loadThreadMeta();
     const files = await findFiles(this.getDefaultPaths(), (p) => p.endsWith('.jsonl'));
     const results: UnifiedTurnUsage[] = [];
     for (const file of files) {
@@ -85,16 +106,56 @@ export class CodexAdapter extends BaseLogAdapter {
     return results;
   }
 
+  private async loadThreadMeta(): Promise<void> {
+    if (this.options.watchPaths) return;
+    const dbPath = getDefaultClientPaths().codex[1];
+    try {
+      await fs.access(dbPath, fs.constants.R_OK);
+    } catch {
+      return;
+    }
+
+    let db;
+    try {
+      db = openReadOnlySqlite(dbPath, 3000);
+      const rows = db
+        .prepare('SELECT id, title, cwd, archived, archived_at FROM threads')
+        .all() as Array<{
+        id: string;
+        title?: string;
+        cwd?: string;
+        archived?: number;
+        archived_at?: number | null;
+      }>;
+      for (const r of rows) {
+        this.threadMeta.set(r.id, {
+          title: r.title || undefined,
+          cwd: r.cwd || undefined,
+          archived: Boolean(r.archived),
+          archivedAt: r.archived_at ? r.archived_at * 1000 : undefined,
+        });
+      }
+    } catch (err) {
+      if (!isSqliteBusyError(err)) {
+        // Non-fatal metadata enrichment
+      }
+    } finally {
+      db?.close();
+    }
+  }
+
   private async processFile(filePath: string): Promise<UnifiedTurnUsage[]> {
     const events = await this.tailer.readNewLines<CodexEvent>(filePath);
     if (events.length === 0) return [];
 
+    const isArchivedPath = filePath.replace(/\\/g, '/').includes('/archived_sessions/');
     let ctx = this.contexts.get(filePath);
     if (!ctx) {
       ctx = {
         sessionId: path.basename(filePath, '.jsonl'),
         sourceMode: 'unknown',
         currentTurnId: 'turn_1',
+        archived: isArchivedPath,
       };
       this.contexts.set(filePath, ctx);
     }
@@ -108,6 +169,16 @@ export class CodexAdapter extends BaseLogAdapter {
       if (ev.type === 'session_meta') {
         if (typeof payload.id === 'string') ctx.sessionId = payload.id;
         else if (typeof payload.session_id === 'string') ctx.sessionId = payload.session_id;
+        if (typeof payload.cwd === 'string') ctx.projectPath = payload.cwd;
+
+        const meta = this.threadMeta.get(ctx.sessionId);
+        if (meta) {
+          ctx.projectPath = ctx.projectPath ?? meta.cwd;
+          ctx.sessionTitle = meta.title;
+          ctx.archived = meta.archived || isArchivedPath;
+          ctx.archivedAt = meta.archivedAt;
+        }
+
         const orig = String(payload.originator ?? payload.source ?? '').toLowerCase();
         if (orig.includes('cli')) ctx.sourceMode = 'cli';
         else if (orig.includes('desktop') || orig.includes('vscode') || orig.includes('app')) {
@@ -119,6 +190,7 @@ export class CodexAdapter extends BaseLogAdapter {
       if (ev.type === 'turn_context') {
         if (typeof payload.turn_id === 'string') ctx.currentTurnId = payload.turn_id;
         if (typeof payload.model === 'string') ctx.model = payload.model;
+        if (typeof payload.cwd === 'string' && !ctx.projectPath) ctx.projectPath = payload.cwd;
         continue;
       }
 
@@ -131,6 +203,10 @@ export class CodexAdapter extends BaseLogAdapter {
           const turn = this.aggregator.ingest({
             client: this.client,
             sessionId: ctx.sessionId,
+            sessionTitle: ctx.sessionTitle,
+            projectPath: ctx.projectPath,
+            archived: ctx.archived,
+            archivedAt: ctx.archivedAt,
             sourceMode: ctx.sourceMode,
             turnId: ctx.currentTurnId,
             accountingMode: 'delta',

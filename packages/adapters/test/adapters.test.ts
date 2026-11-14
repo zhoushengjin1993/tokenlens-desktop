@@ -112,15 +112,16 @@ describe('Phase 1 Multi-Client Adapters', () => {
     expect(turn.status).toBe('completed');
     expect(turn.promptSummary).toContain('AntigravityAdapter');
     expect(turn.toolCalls?.map((t) => t.name)).toContain('list_dir');
+    expect(turn.cachedTokens).toBeGreaterThanOrEqual(3500);
     expect(turn.totalTokens).toBeGreaterThan(0);
   });
 
-  it('ZcodeAdapter queries turn_usage in read-only SQLite mode', async () => {
+  it('ZcodeAdapter queries turn_usage in read-only SQLite mode with project and archive metadata', async () => {
     const tmp = await makeTempDir('tokenlens-zcode-');
     const dbPath = path.join(tmp, 'db.sqlite');
     const db = new DatabaseSync(dbPath);
     db.exec(`
-      CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT);
+      CREATE TABLE session (id TEXT PRIMARY KEY, title TEXT, directory TEXT, time_archived INTEGER);
       CREATE TABLE model_usage (id TEXT PRIMARY KEY, session_id TEXT, turn_id TEXT, model_id TEXT, started_at INTEGER);
       CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, data TEXT, time_created INTEGER);
       CREATE TABLE turn_usage (
@@ -140,7 +141,12 @@ describe('Phase 1 Multi-Client Adapters', () => {
         PRIMARY KEY (session_id, turn_id)
       );
     `);
-    db.prepare('INSERT INTO session (id, title) VALUES (?, ?)').run('z-sess-1', 'Zcode Demo');
+    db.prepare('INSERT INTO session (id, title, directory, time_archived) VALUES (?, ?, ?, ?)').run(
+      'z-sess-1',
+      'Zcode Demo',
+      'D:\\workspace\\zcode-app',
+      1700000000000,
+    );
     db.prepare('INSERT INTO model_usage (id, session_id, turn_id, model_id, started_at) VALUES (?, ?, ?, ?, ?)').run(
       'mu_1',
       'z-sess-1',
@@ -169,6 +175,9 @@ describe('Phase 1 Multi-Client Adapters', () => {
     const turn = turns[0];
     expect(turn.client).toBe('zcode');
     expect(turn.sessionTitle).toBe('Zcode Demo');
+    expect(turn.projectName).toBe('zcode-app');
+    expect(turn.archived).toBe(true);
+    expect(turn.archivedAt).toBe(1700000000000);
     expect(turn.model).toBe('glm-5');
     expect(turn.promptSummary).toBe('Build ZcodeAdapter');
     expect(turn.inputTokens).toBe(4200);

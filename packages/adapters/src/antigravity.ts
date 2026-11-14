@@ -14,14 +14,21 @@ import { ByteOffsetTailer } from './utils/jsonl-tail.js';
 import { findFiles, truncatePrompt } from './utils/fs-walk.js';
 import { isSqliteBusyError, openReadOnlySqlite } from './utils/sqlite-ro.js';
 
+const BASE_SYSTEM_TOKENS = 3500;
+
 interface AntigravitySessionCtx {
   sessionId: string;
   currentTurnId: string;
   turnStartedAt: number;
   promptSummary: string;
-  inputChars: number;
-  reasoningChars: number;
-  outputChars: number;
+  /** Cumulative context tokens carried into the current turn (system + prior turns) */
+  historyTokens: number;
+  /** Fresh input tokens in current turn (user prompt + tool outputs) */
+  turnInputTokens: number;
+  turnCachedTokens: number;
+  turnReasoningTokens: number;
+  turnOutputTokens: number;
+  seenStepIndices: Set<number>;
 }
 
 interface AntigravityStep {
@@ -49,18 +56,29 @@ interface AntigravityStep {
 interface SummaryRow {
   conversation_id: string;
   title: string;
-  parent_conversation_id: string;
+  workspace_uris: string;
 }
 
 function estimateTokens(charCount: number): number {
   return charCount > 0 ? Math.max(1, Math.ceil(charCount / 4)) : 0;
 }
 
+function parseWorkspaceUri(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const first = raw.split(',')[0]?.trim();
+  if (!first) return undefined;
+  if (first.startsWith('file:///')) {
+    const decoded = decodeURIComponent(first.slice('file:///'.length));
+    return process.platform === 'win32' ? decoded.replace(/\//g, '\\') : `/${decoded}`;
+  }
+  return first;
+}
+
 export class AntigravityAdapter extends BaseLogAdapter {
   readonly client: ClientType = 'antigravity';
   private readonly tailer = new ByteOffsetTailer();
   private readonly contexts = new Map<string, AntigravitySessionCtx>();
-  private readonly sessionTitles = new Map<string, string>();
+  private readonly sessionMeta = new Map<string, { title?: string; projectPath?: string }>();
   private watcher: FSWatcher | null = null;
 
   getDefaultPaths(): string[] {
@@ -84,10 +102,13 @@ export class AntigravityAdapter extends BaseLogAdapter {
     });
 
     const handleFile = async (filePath: string) => {
-      if (!filePath.endsWith('transcript.jsonl')) return;
+      const base = path.basename(filePath);
+      if (base !== 'transcript.jsonl' && base !== 'transcript_full.jsonl') return;
       try {
         await this.loadSummaries();
-        const turns = await this.processFile(filePath);
+        const target = await this.resolvePreferredTranscript(path.dirname(filePath));
+        if (target !== filePath && base === 'transcript.jsonl') return;
+        const turns = await this.processFile(target);
         for (const t of turns) this.emitTurn(t);
       } catch (err) {
         this.emitError(err);
@@ -108,15 +129,36 @@ export class AntigravityAdapter extends BaseLogAdapter {
 
   async scanOnce(): Promise<UnifiedTurnUsage[]> {
     await this.loadSummaries();
-    const files = await findFiles(
+    const candidates = await findFiles(
       this.getDefaultPaths(),
-      (p) => path.basename(p) === 'transcript.jsonl',
+      (p) => path.basename(p) === 'transcript.jsonl' || path.basename(p) === 'transcript_full.jsonl',
     );
+
+    // Deduplicate per logs directory, preferring transcript_full.jsonl over transcript.jsonl
+    const byDir = new Map<string, string>();
+    for (const file of candidates) {
+      const dir = path.dirname(file);
+      const existing = byDir.get(dir);
+      if (!existing || path.basename(file) === 'transcript_full.jsonl') {
+        byDir.set(dir, file);
+      }
+    }
+
     const results: UnifiedTurnUsage[] = [];
-    for (const file of files) {
+    for (const file of byDir.values()) {
       results.push(...(await this.processFile(file)));
     }
     return results;
+  }
+
+  private async resolvePreferredTranscript(logsDir: string): Promise<string> {
+    const fullPath = path.join(logsDir, 'transcript_full.jsonl');
+    try {
+      await fs.access(fullPath, fs.constants.R_OK);
+      return fullPath;
+    } catch {
+      return path.join(logsDir, 'transcript.jsonl');
+    }
   }
 
   private async loadSummaries(): Promise<void> {
@@ -131,10 +173,13 @@ export class AntigravityAdapter extends BaseLogAdapter {
     try {
       db = openReadOnlySqlite(dbPath, 3000);
       const rows = db
-        .prepare('SELECT conversation_id, title, parent_conversation_id FROM conversation_summaries')
+        .prepare('SELECT conversation_id, title, workspace_uris FROM conversation_summaries')
         .all() as unknown as SummaryRow[];
       for (const r of rows) {
-        if (r.title) this.sessionTitles.set(r.conversation_id, r.title);
+        this.sessionMeta.set(r.conversation_id, {
+          title: r.title || undefined,
+          projectPath: parseWorkspaceUri(r.workspace_uris),
+        });
       }
     } catch (err) {
       if (!isSqliteBusyError(err)) {
@@ -145,8 +190,25 @@ export class AntigravityAdapter extends BaseLogAdapter {
     }
   }
 
+  private async estimateStepToolOutputTokens(filePath: string, stepIndex: number): Promise<number> {
+    // Expected: .../.system_generated/logs/transcript[_full].jsonl -> .../.system_generated/steps/<step_index>/
+    const logsDir = path.dirname(filePath);
+    const sysGenDir = path.dirname(logsDir);
+    const stepDir = path.join(sysGenDir, 'steps', String(stepIndex));
+    try {
+      const entries = await fs.readdir(stepDir);
+      let totalBytes = 0;
+      for (const name of entries) {
+        const st = await fs.stat(path.join(stepDir, name));
+        if (st.isFile()) totalBytes += st.size;
+      }
+      return estimateTokens(totalBytes);
+    } catch {
+      return 0;
+    }
+  }
+
   private extractSessionId(filePath: string): string {
-    // Expected: .../brain/<conversation-id>/.system_generated/logs/transcript.jsonl
     const parts = path.normalize(filePath).split(path.sep);
     const logsIdx = parts.lastIndexOf('logs');
     if (logsIdx >= 2 && parts[logsIdx - 1] === '.system_generated') {
@@ -160,46 +222,60 @@ export class AntigravityAdapter extends BaseLogAdapter {
     if (steps.length === 0) return [];
 
     const sessionId = this.extractSessionId(filePath);
-    let ctx = this.contexts.get(filePath);
+    let ctx = this.contexts.get(sessionId);
     if (!ctx) {
       ctx = {
         sessionId,
         currentTurnId: 'step_0',
         turnStartedAt: Date.now(),
         promptSummary: '',
-        inputChars: 0,
-        reasoningChars: 0,
-        outputChars: 0,
+        historyTokens: BASE_SYSTEM_TOKENS,
+        turnInputTokens: 0,
+        turnCachedTokens: 0,
+        turnReasoningTokens: 0,
+        turnOutputTokens: 0,
+        seenStepIndices: new Set(),
       };
-      this.contexts.set(filePath, ctx);
+      this.contexts.set(sessionId, ctx);
     }
 
     const updatedMap = new Map<string, UnifiedTurnUsage>();
-    const sessionTitle = this.sessionTitles.get(sessionId);
+    const meta = this.sessionMeta.get(sessionId);
 
     for (const step of steps) {
+      if (ctx.seenStepIndices.has(step.step_index)) continue;
+      ctx.seenStepIndices.add(step.step_index);
+
       const ts = step.created_at ? Date.parse(step.created_at) : Date.now();
 
       if (step.type === 'USER_INPUT') {
+        // Carry forward previous turn's fresh tokens into session history cache
+        ctx.historyTokens += ctx.turnInputTokens + ctx.turnOutputTokens;
+
         ctx.currentTurnId = `step_${step.step_index}`;
         ctx.turnStartedAt = ts;
         ctx.promptSummary = truncatePrompt(step.content ?? '');
-        ctx.inputChars = (step.content ?? '').length;
-        ctx.reasoningChars = 0;
-        ctx.outputChars = 0;
+        const userTokens = estimateTokens((step.content ?? '').length);
+
+        ctx.turnCachedTokens = ctx.historyTokens;
+        ctx.turnInputTokens = userTokens;
+        ctx.turnReasoningTokens = 0;
+        ctx.turnOutputTokens = 0;
 
         const turn = this.aggregator.ingest({
           client: this.client,
           sessionId: ctx.sessionId,
-          sessionTitle,
+          sessionTitle: meta?.title,
+          projectPath: meta?.projectPath,
+          archived: false,
           sourceMode: 'desktop',
           turnId: ctx.currentTurnId,
           messageId: ctx.currentTurnId,
           accountingMode: 'snapshot',
           promptSummary: ctx.promptSummary,
           metrics: {
-            inputTokens: step.usage?.input_tokens ?? estimateTokens(ctx.inputChars),
-            cachedTokens: step.usage?.cached_tokens ?? 0,
+            inputTokens: step.usage?.input_tokens ?? ctx.turnInputTokens,
+            cachedTokens: step.usage?.cached_tokens ?? ctx.turnCachedTokens,
             reasoningTokens: 0,
             outputTokens: 0,
           },
@@ -213,8 +289,15 @@ export class AntigravityAdapter extends BaseLogAdapter {
       }
 
       if (step.type === 'PLANNER_RESPONSE') {
-        ctx.reasoningChars += (step.thinking ?? '').length;
-        ctx.outputChars += (step.content ?? '').length;
+        const toolArgsChars = (step.tool_calls ?? []).reduce(
+          (acc, tc) => acc + (tc.name?.length ?? 0) + (tc.arguments?.length ?? 0),
+          0,
+        );
+        const toolOutputTokens = await this.estimateStepToolOutputTokens(filePath, step.step_index);
+
+        ctx.turnReasoningTokens += estimateTokens((step.thinking ?? '').length);
+        ctx.turnOutputTokens += estimateTokens((step.content ?? '').length + toolArgsChars);
+        ctx.turnInputTokens += toolOutputTokens;
 
         const toolCalls: ToolCallSummary[] = (step.tool_calls ?? []).map((tc, idx) => ({
           callId: tc.id ?? `${ctx.currentTurnId}_tc_${step.step_index}_${idx}`,
@@ -226,7 +309,9 @@ export class AntigravityAdapter extends BaseLogAdapter {
         const turn = this.aggregator.ingest({
           client: this.client,
           sessionId: ctx.sessionId,
-          sessionTitle,
+          sessionTitle: meta?.title,
+          projectPath: meta?.projectPath,
+          archived: false,
           sourceMode: 'desktop',
           turnId: ctx.currentTurnId,
           messageId: ctx.currentTurnId,
@@ -241,10 +326,11 @@ export class AntigravityAdapter extends BaseLogAdapter {
                 totalTokens: step.usage.total_tokens,
               }
             : {
-                inputTokens: estimateTokens(ctx.inputChars),
-                cachedTokens: 0,
-                reasoningTokens: estimateTokens(ctx.reasoningChars),
-                outputTokens: estimateTokens(ctx.outputChars),
+                inputTokens: ctx.turnInputTokens,
+                cachedTokens: ctx.turnCachedTokens,
+                reasoningTokens: ctx.turnReasoningTokens,
+                outputTokens: ctx.turnOutputTokens,
+                totalTokens: ctx.turnInputTokens + ctx.turnOutputTokens,
               },
           startedAt: ctx.turnStartedAt,
           updatedAt: ts,

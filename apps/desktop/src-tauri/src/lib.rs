@@ -10,8 +10,8 @@ static CLICK_THROUGH: AtomicBool = AtomicBool::new(false);
 
 const PILL_WIDTH: f64 = 280.0;
 const PILL_HEIGHT: f64 = 52.0;
-const DRAWER_WIDTH: f64 = 384.0;
-const DRAWER_HEIGHT: f64 = 604.0;
+const DRAWER_WIDTH: f64 = 416.0;
+const DRAWER_HEIGHT: f64 = 632.0;
 const EDGE_MARGIN: f64 = 16.0;
 
 #[tauri::command]

@@ -14,6 +14,7 @@ import { findFiles, truncatePrompt } from './utils/fs-walk.js';
 interface ClaudeSessionCtx {
   currentTurnId: string;
   turnCounter: number;
+  projectPath?: string;
   lastPrompt?: string;
 }
 
@@ -26,6 +27,7 @@ interface ClaudeJsonlEntry {
   promptId?: string;
   timestamp?: string;
   entrypoint?: string;
+  cwd?: string;
   message?: {
     id?: string;
     role?: string;
@@ -113,6 +115,7 @@ export class ClaudeAdapter extends BaseLogAdapter {
       const ts = entry.timestamp ? Date.parse(entry.timestamp) : Date.now();
       const sessionId = entry.sessionId ?? path.basename(filePath, '.jsonl');
       const sourceMode = entry.entrypoint?.includes('cli') ? 'cli' : 'desktop';
+      if (entry.cwd && !ctx.projectPath) ctx.projectPath = entry.cwd;
 
       if (entry.type === 'user' && entry.message) {
         ctx.turnCounter += 1;
@@ -128,6 +131,7 @@ export class ClaudeAdapter extends BaseLogAdapter {
         const turn = this.aggregator.ingest({
           client: this.client,
           sessionId,
+          projectPath: ctx.projectPath,
           sourceMode,
           turnId: ctx.currentTurnId,
           accountingMode: 'snapshot',

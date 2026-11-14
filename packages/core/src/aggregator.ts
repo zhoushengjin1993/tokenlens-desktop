@@ -56,6 +56,28 @@ function addMetrics(a: TokenMetrics, b: TokenMetrics): TokenMetrics {
   };
 }
 
+export function normalizeProject(projectPath?: string, explicitName?: string): {
+  projectId: string;
+  projectName: string;
+  projectPath?: string;
+} {
+  const cleaned = projectPath?.trim().replace(/[\\/]+$/, '');
+  if (!cleaned) {
+    return {
+      projectId: '__global__',
+      projectName: explicitName || '未绑定项目',
+    };
+  }
+  const normalizedId = cleaned.replace(/\\/g, '/').toLowerCase();
+  const segments = cleaned.split(/[\\/]/).filter(Boolean);
+  const name = explicitName || segments[segments.length - 1] || cleaned;
+  return {
+    projectId: normalizedId,
+    projectName: name,
+    projectPath: cleaned,
+  };
+}
+
 export class TurnAggregator {
   private readonly sessions = new Map<string, SessionState>();
 
@@ -84,6 +106,7 @@ export class TurnAggregator {
 
     const session = this.getOrCreateSession(fragment.client, fragment.sessionId);
     let state = session.turns.get(fragment.turnId);
+    const proj = normalizeProject(fragment.projectPath, fragment.projectName);
 
     if (!state) {
       const turnIndex = session.turnOrder.length + 1;
@@ -93,6 +116,11 @@ export class TurnAggregator {
           client: fragment.client,
           sessionId: fragment.sessionId,
           sessionTitle: fragment.sessionTitle,
+          projectId: fragment.projectId ?? proj.projectId,
+          projectName: proj.projectName,
+          projectPath: proj.projectPath,
+          archived: fragment.archived ?? false,
+          archivedAt: fragment.archivedAt,
           sourceMode: fragment.sourceMode ?? 'unknown',
           turnId: fragment.turnId,
           turnIndex,
@@ -124,6 +152,13 @@ export class TurnAggregator {
 
     const turn = state.turn;
     if (fragment.sessionTitle) turn.sessionTitle = fragment.sessionTitle;
+    if (fragment.projectPath) {
+      turn.projectId = fragment.projectId ?? proj.projectId;
+      turn.projectName = proj.projectName;
+      turn.projectPath = proj.projectPath;
+    }
+    if (fragment.archived !== undefined) turn.archived = fragment.archived;
+    if (fragment.archivedAt !== undefined) turn.archivedAt = fragment.archivedAt;
     if (fragment.sourceMode && fragment.sourceMode !== 'unknown') turn.sourceMode = fragment.sourceMode;
     if (fragment.model) turn.model = fragment.model;
     if (fragment.promptSummary && !turn.promptSummary) turn.promptSummary = fragment.promptSummary;

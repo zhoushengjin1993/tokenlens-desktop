@@ -61,6 +61,7 @@ export function OnboardingCard({ health, onRefresh, onStartSim }: OnboardingCard
         type="button"
         onClick={onStartSim}
         className="w-full py-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/30 text-emerald-200 text-xs font-medium transition-colors cursor-pointer"
+        title="启动回放演示"
       >
         启动 LogReplaySimulator 回放演示
       </button>

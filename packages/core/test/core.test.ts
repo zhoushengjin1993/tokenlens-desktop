@@ -4,6 +4,9 @@ import { calculateTurnCost, detectTokenSpike, type UnifiedTurnUsage } from '../s
 function makeTurn(overrides: Partial<UnifiedTurnUsage> = {}): UnifiedTurnUsage {
   return {
     client: 'claude',
+    projectId: 'p1',
+    projectName: 'demo',
+    archived: false,
     sessionId: 's1',
     turnId: 't1',
     turnIndex: 1,

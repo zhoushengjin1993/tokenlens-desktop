@@ -31,6 +31,11 @@ export interface UnifiedTurnUsage {
   client: ClientType;
   sessionId: string;
   sessionTitle?: string;
+  projectId: string;
+  projectName: string;
+  projectPath?: string;
+  archived: boolean;
+  archivedAt?: number;
   sourceMode?: SourceMode;
   turnId: string;
   turnIndex: number;
@@ -68,6 +73,11 @@ export interface RawTurnFragment {
   client: ClientType;
   sessionId: string;
   sessionTitle?: string;
+  projectId?: string;
+  projectName?: string;
+  projectPath?: string;
+  archived?: boolean;
+  archivedAt?: number;
   sourceMode?: SourceMode;
   turnId: string;
   /** Used to deduplicate streaming snapshots of the same message */

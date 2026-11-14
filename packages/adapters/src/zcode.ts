@@ -14,6 +14,8 @@ import { truncatePrompt } from './utils/fs-walk.js';
 interface ZcodeTurnRow {
   session_id: string;
   session_title: string | null;
+  project_path: string | null;
+  time_archived: number | null;
   turn_id: string;
   user_message_id: string | null;
   status: string;
@@ -92,12 +94,20 @@ export class ZcodeAdapter extends BaseLogAdapter {
           .get();
         if (!hasTurnUsage) continue;
 
+        const sessionCols = db
+          .prepare('PRAGMA table_info(session)')
+          .all() as Array<{ name: string }>;
+        const hasDir = sessionCols.some((c) => c.name === 'directory');
+        const hasArchived = sessionCols.some((c) => c.name === 'time_archived');
+
         const rows = db
           .prepare(
             `
             SELECT
               t.session_id,
               s.title AS session_title,
+              ${hasDir ? 's.directory' : 'NULL'} AS project_path,
+              ${hasArchived ? 's.time_archived' : 'NULL'} AS time_archived,
               t.turn_id,
               t.user_message_id,
               t.status,
@@ -129,7 +139,7 @@ export class ZcodeAdapter extends BaseLogAdapter {
 
         for (const row of rows) {
           const updatedAt = row.completed_at ?? row.started_at;
-          const fingerprint = `${row.status}:${row.computed_total_tokens}:${row.output_tokens}:${updatedAt}`;
+          const fingerprint = `${row.status}:${row.computed_total_tokens}:${row.output_tokens}:${updatedAt}:${row.time_archived ?? 0}`;
           const cacheKey = `${row.session_id}::${row.turn_id}`;
           if (this.lastSeenKey.get(cacheKey) === fingerprint) continue;
           this.lastSeenKey.set(cacheKey, fingerprint);
@@ -148,6 +158,9 @@ export class ZcodeAdapter extends BaseLogAdapter {
             client: this.client,
             sessionId: row.session_id,
             sessionTitle: row.session_title ?? undefined,
+            projectPath: row.project_path ?? undefined,
+            archived: row.time_archived !== null && row.time_archived !== undefined,
+            archivedAt: row.time_archived ?? undefined,
             sourceMode: 'cli',
             turnId: row.turn_id,
             messageId: row.turn_id,

@@ -2,11 +2,15 @@ import { create } from 'zustand';
 import type { AdapterHealth, ClientType, UnifiedTurnUsage } from '@tokenlens/core';
 
 export type UiState = 'pill' | 'drawer';
+export type ViewMode = 'active' | 'archived';
 
 interface TokenStoreState {
   turns: Record<string, UnifiedTurnUsage>;
   health: AdapterHealth[];
   selectedClient: ClientType;
+  viewMode: ViewMode;
+  selectedProjectId: string | null;
+  selectedSessionId: string | null;
   autoSwitch: boolean;
   uiState: UiState;
   expandedTurnKey: string | null;
@@ -18,6 +22,10 @@ interface TokenStoreState {
   upsertTurn: (turn: UnifiedTurnUsage, activeClient: ClientType) => void;
   setHealth: (health: AdapterHealth[]) => void;
   setSelectedClient: (client: ClientType) => void;
+  setViewMode: (mode: ViewMode) => void;
+  selectProject: (projectId: string | null) => void;
+  selectSession: (sessionId: string | null) => void;
+  goRoot: () => void;
   toggleAutoSwitch: () => void;
   toggleShowCost: () => void;
   setUiState: (state: UiState) => void;
@@ -35,6 +43,9 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
   turns: {},
   health: [],
   selectedClient: 'codex',
+  viewMode: 'active',
+  selectedProjectId: null,
+  selectedSessionId: null,
   autoSwitch: true,
   uiState: 'drawer',
   expandedTurnKey: null,
@@ -60,11 +71,48 @@ export const useTokenStore = create<TokenStoreState>((set) => ({
         ...state.turns,
         [turnCompositeKey(turn)]: turn,
       },
-      selectedClient: state.autoSwitch ? activeClient : state.selectedClient,
+      ...(state.autoSwitch
+        ? {
+            selectedClient: activeClient,
+            viewMode: turn.archived ? 'archived' : 'active',
+            selectedProjectId: turn.archived ? null : turn.projectId,
+            selectedSessionId: turn.sessionId,
+          }
+        : {}),
     })),
 
   setHealth: (health) => set({ health }),
-  setSelectedClient: (selectedClient) => set({ selectedClient }),
+  setSelectedClient: (selectedClient) =>
+    set({
+      selectedClient,
+      selectedProjectId: null,
+      selectedSessionId: null,
+      expandedTurnKey: null,
+    }),
+  setViewMode: (viewMode) =>
+    set({
+      viewMode,
+      selectedProjectId: null,
+      selectedSessionId: null,
+      expandedTurnKey: null,
+    }),
+  selectProject: (selectedProjectId) =>
+    set({
+      selectedProjectId,
+      selectedSessionId: null,
+      expandedTurnKey: null,
+    }),
+  selectSession: (selectedSessionId) =>
+    set({
+      selectedSessionId,
+      expandedTurnKey: null,
+    }),
+  goRoot: () =>
+    set({
+      selectedProjectId: null,
+      selectedSessionId: null,
+      expandedTurnKey: null,
+    }),
   toggleAutoSwitch: () => set((state) => ({ autoSwitch: !state.autoSwitch })),
   toggleShowCost: () => set((state) => ({ showCost: !state.showCost })),
   setUiState: (uiState) => set({ uiState }),
