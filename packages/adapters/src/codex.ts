@@ -33,6 +33,7 @@ interface CodexSessionContext {
   model?: string;
   turnStartedAt?: number;
   lastPrompt?: string;
+  lastTotalSignature?: string;
 }
 
 interface CodexEvent {
@@ -225,12 +226,25 @@ export class CodexAdapter extends BaseLogAdapter {
           const usage = last ?? total;
           if (!usage) continue;
 
+          if (total) {
+            const totalSig = `${total.input_tokens ?? 0}:${total.cached_input_tokens ?? 0}:${total.output_tokens ?? 0}:${total.reasoning_output_tokens ?? 0}:${total.total_tokens ?? 0}`;
+            if (ctx.lastTotalSignature === totalSig) continue;
+            ctx.lastTotalSignature = totalSig;
+          }
+
+          const messageId =
+            last && total && total.total_tokens !== undefined
+              ? `tok_total_${total.total_tokens}_${total.input_tokens ?? 0}_${total.output_tokens ?? 0}`
+              : last
+                ? `tok_${ev.timestamp ?? ts}`
+                : undefined;
+
           const turn = this.aggregator.ingest({
             client: this.client,
             sessionId: ctx.sessionId,
             sourceMode: ctx.sourceMode,
             turnId: ctx.currentTurnId,
-            messageId: last ? `tok_${ev.timestamp ?? ts}` : undefined,
+            messageId,
             accountingMode: last ? 'delta' : 'cumulative',
             model: ctx.model,
             promptSummary: ctx.lastPrompt,

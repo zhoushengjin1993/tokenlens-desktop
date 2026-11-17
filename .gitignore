@@ -32,3 +32,6 @@ tmp/
 Thumbs.db
 .vscode/
 .idea/
+
+# Promo videos (keep only lightweight preview gif if needed)
+*.mp4

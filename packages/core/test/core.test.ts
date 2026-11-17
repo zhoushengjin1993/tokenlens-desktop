@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { calculateTurnCost, detectTokenSpike, type UnifiedTurnUsage } from '../src/index.js';
+import {
+  calculateTurnCost,
+  detectTokenSpike,
+  getTurnInputBreakdown,
+  type UnifiedTurnUsage,
+} from '../src/index.js';
 
 function makeTurn(overrides: Partial<UnifiedTurnUsage> = {}): UnifiedTurnUsage {
   return {
@@ -43,5 +48,27 @@ describe('Core pricing & spike detection', () => {
     const spike = detectTokenSpike(makeTurn({ inputTokens: 55_000, cachedTokens: 0 }));
     expect(spike.isSpike).toBe(true);
     expect(spike.reasons.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('does not double-count cached tokens for inclusive-input clients like Codex', () => {
+    const codexTurn = makeTurn({
+      client: 'codex',
+      model: 'gpt-5-codex',
+      inputTokens: 12_400,
+      cachedTokens: 9_600,
+      outputTokens: 380,
+      reasoningTokens: 120,
+      totalTokens: 12_780,
+    });
+
+    const breakdown = getTurnInputBreakdown(codexTurn);
+    expect(breakdown.totalInputTokens).toBe(12_400);
+    expect(breakdown.uncachedInputTokens).toBe(2_800);
+    expect(breakdown.cachedTokens).toBe(9_600);
+
+    const cost = calculateTurnCost(codexTurn);
+    // Uncached: 2,800 * $2.50 / 1M = $0.007; Cached: 9,600 * $0.625 / 1M = $0.006
+    expect(cost.inputCostUsd).toBeCloseTo(0.007, 6);
+    expect(cost.cachedCostUsd).toBeCloseTo(0.006, 6);
   });
 });

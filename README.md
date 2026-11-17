@@ -25,7 +25,7 @@ Track real-time per-turn token usage, prompt cache hit rates, estimated USD savi
 
 ### Prerequisites
 - **Node.js `>= 22.0.0`** (`node -v`) — required at runtime because TokenLens uses Node's built-in `node:sqlite` module to read local agent databases cleanly without native binary rebuilds. The installers are ~4 MB and do **not** bundle or overwrite your local Node.js installation.
-- **Windows 10 / 11**: WebView2 runtime (pre-installed on Windows 10/11).
+- **Windows 10 / 11**: WebView2 runtime (pre-installed on Windows 10/11). (Note: Pre-built installers are currently unsigned. If Windows SmartScreen warns, click **More info → Run anyway** or right-click the installer → **Properties → Unblock**. If Windows 11 **Smart App Control** blocks the unsigned installer, run from source via `pnpm desktop` or build locally with `pnpm --filter @tokenlens/desktop tauri build`.)
 - **macOS (Apple Silicon & Intel)**: macOS 11+. (If Gatekeeper warns on an unsigned app, run `xattr -cr "/Applications/TokenLens Desktop.app"` or allow it in **System Settings → Privacy & Security**.)
 
 ### Download Installer

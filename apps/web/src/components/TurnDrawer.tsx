@@ -18,7 +18,7 @@ import {
   Stethoscope,
   X,
 } from 'lucide-react';
-import { calculateTurnCost } from '@tokenlens/core/pricing';
+import { calculateTurnCost, getTurnInputBreakdown } from '@tokenlens/core/pricing';
 import type { UnifiedTurnUsage } from '@tokenlens/core';
 import { useTokenStore, turnCompositeKey } from '../stores/useTokenStore';
 import { ALL_CLIENTS, CLIENT_LABELS, formatDuration, formatTokens } from '../utils/format';
@@ -63,9 +63,10 @@ function summarizeTurns(turns: UnifiedTurnUsage[]) {
   let hasEstimated = false;
 
   for (const t of turns) {
+    const { totalInputTokens } = getTurnInputBreakdown(t);
     totalTokens += t.totalTokens;
     cachedTokens += t.cachedTokens;
-    inputBase += t.inputTokens + t.cachedTokens;
+    inputBase += totalInputTokens;
     savingsUsd += calculateTurnCost(t).cacheSavingsUsd;
     if (t.usageAccuracy === 'estimated') hasEstimated = true;
   }
@@ -96,10 +97,11 @@ function groupSessions(turns: UnifiedTurnUsage[]): SessionGroup[] {
       };
       map.set(t.sessionId, group);
     }
+    const { totalInputTokens } = getTurnInputBreakdown(t);
     group.turns.push(t);
     group.totalTokens += t.totalTokens;
     group.cachedTokens += t.cachedTokens;
-    group.inputBase += t.inputTokens + t.cachedTokens;
+    group.inputBase += totalInputTokens;
     if (t.updatedAt > group.latestUpdatedAt) group.latestUpdatedAt = t.updatedAt;
     if (t.sessionTitle) group.sessionTitle = t.sessionTitle;
     if (t.model) group.model = t.model;
@@ -650,7 +652,8 @@ export function TurnDrawer() {
                 {[...currentSession.turns].reverse().map((turn) => {
                   const key = turnCompositeKey(turn);
                   const isExpanded = expandedTurnKey === key;
-                  const totalMix = turn.cachedTokens + turn.inputTokens + turn.outputTokens;
+                  const { totalInputTokens } = getTurnInputBreakdown(turn);
+                  const totalMix = totalInputTokens + turn.outputTokens;
                   const cachedPct = totalMix > 0 ? (turn.cachedTokens / totalMix) * 100 : 0;
                   const freshPct = totalMix > 0 ? 100 - cachedPct : 0;
 

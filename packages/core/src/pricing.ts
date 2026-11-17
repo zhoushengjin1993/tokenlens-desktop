@@ -1,4 +1,41 @@
-import type { UnifiedTurnUsage } from './types.js';
+import type { ClientType, UnifiedTurnUsage } from './types.js';
+
+const INCLUSIVE_INPUT_CLIENTS: ReadonlySet<ClientType> = new Set(['codex', 'dsh', 'zcode']);
+
+export interface TurnInputBreakdown {
+  /** Total input tokens sent to the model (including cached tokens) */
+  totalInputTokens: number;
+  /** Uncached / fresh input tokens billed at standard input rate */
+  uncachedInputTokens: number;
+  /** Cached input tokens billed at cached read rate */
+  cachedTokens: number;
+}
+
+/**
+ * Normalizes input vs cached token accounting across clients:
+ * - OpenAI/Codex, DSH, and Zcode report `inputTokens` as total input (already including `cachedTokens`).
+ * - Claude, Antigravity (estimated), and Cursor (estimated) report `inputTokens` as uncached fresh input.
+ */
+export function getTurnInputBreakdown(turn: Pick<UnifiedTurnUsage, 'client' | 'inputTokens' | 'cachedTokens' | 'cacheCreationTokens'>): TurnInputBreakdown {
+  const cachedTokens = Math.max(0, turn.cachedTokens);
+  const rawInput = Math.max(0, turn.inputTokens);
+  const cacheCreation = Math.max(0, turn.cacheCreationTokens ?? 0);
+
+  if (INCLUSIVE_INPUT_CLIENTS.has(turn.client) && rawInput >= cachedTokens) {
+    return {
+      totalInputTokens: rawInput,
+      uncachedInputTokens: rawInput - cachedTokens,
+      cachedTokens,
+    };
+  }
+
+  const uncachedInputTokens = rawInput + cacheCreation;
+  return {
+    totalInputTokens: uncachedInputTokens + cachedTokens,
+    uncachedInputTokens,
+    cachedTokens,
+  };
+}
 
 /** Prices in USD per 1M tokens */
 export interface ModelPrice {
@@ -54,14 +91,15 @@ export function resolveModelPrice(model?: string): { key: string; price: ModelPr
 
 export function calculateTurnCost(turn: UnifiedTurnUsage): TurnCostBreakdown {
   const { key, price } = resolveModelPrice(turn.model);
+  const { uncachedInputTokens, cachedTokens } = getTurnInputBreakdown(turn);
   const billableOutput = turn.outputTokens + turn.reasoningTokens;
 
-  const inputCostUsd = (turn.inputTokens / 1_000_000) * price.inputPer1M;
-  const cachedCostUsd = (turn.cachedTokens / 1_000_000) * price.cachedInputPer1M;
+  const inputCostUsd = (uncachedInputTokens / 1_000_000) * price.inputPer1M;
+  const cachedCostUsd = (cachedTokens / 1_000_000) * price.cachedInputPer1M;
   const outputCostUsd = (billableOutput / 1_000_000) * price.outputPer1M;
   const totalCostUsd = inputCostUsd + cachedCostUsd + outputCostUsd;
 
-  const uncachedEquivalent = (turn.cachedTokens / 1_000_000) * price.inputPer1M;
+  const uncachedEquivalent = (cachedTokens / 1_000_000) * price.inputPer1M;
   const cacheSavingsUsd = Math.max(0, uncachedEquivalent - cachedCostUsd);
 
   return {

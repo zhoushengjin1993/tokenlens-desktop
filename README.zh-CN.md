@@ -25,7 +25,7 @@
 
 ### 运行环境要求
 - **Node.js `>= 22.0.0`**（需提前在本地安装，`node -v` 可查）：TokenLens 依赖 Node 内置的 `node:sqlite` 模块免编译读取本地数据库。安装包仅约 4 MB，**不会**内置或覆盖你本地已有的 Node.js 环境。
-- **Windows 10 / 11**：系统内置 WebView2 运行时即可直接运行。
+- **Windows 10 / 11**：系统内置 WebView2 运行时即可直接运行。（注：当前预编译安装包暂未接入商业代码签名。若遇到 SmartScreen 提示，可点击**更多信息 → 仍要运行**，或右键安装包 → **属性 → 勾选“解除锁定”**；若被 Windows 11 **智能应用控制（Smart App Control）**拦截，可直接从源码运行 `pnpm desktop` 或在本地执行 `pnpm --filter @tokenlens/desktop tauri build` 构建。）
 - **macOS（Apple Silicon / Intel 通用版）**：macOS 11+。（若首次打开提示“无法验证开发者”，请在**系统设置 → 隐私与安全性**中允许打开，或执行 `xattr -cr "/Applications/TokenLens Desktop.app"`。）
 
 ### 下载安装包
